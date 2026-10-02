@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reverse Classroom</title>
+<style>
+  :root { --bg:#0f1420; --panel:#181f30; --ink:#e8ecf5; --mute:#8d97b0; --acc:#ffb703; --ok:#3ddc97; }
+  @media (prefers-color-scheme: light) { :root { --bg:#f5f6fa; --panel:#fff; --ink:#1b2133; --mute:#5b6580; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui,sans-serif; }
+  header { padding:16px; display:flex; flex-wrap:wrap; gap:12px; align-items:baseline; justify-content:space-between; }
+  h1 { margin:0; font-size:1.3rem; } .tag { color:var(--mute); font-size:.85rem; }
+  main { display:grid; grid-template-columns: 1fr 1fr; gap:16px; padding:0 16px 16px; }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+  .panel { background:var(--panel); border-radius:12px; padding:14px; }
+  label { display:block; font-size:.8rem; color:var(--mute); margin-bottom:4px; }
+  input, textarea { width:100%; background:transparent; color:var(--ink); border:1px solid #8d97b055; border-radius:8px; padding:8px; font:inherit; }
+  textarea.code { font-family: ui-monospace, monospace; font-size:.9rem; height:260px; }
+  textarea.say { height:80px; margin-top:8px; }
+  button { background:var(--acc); color:#111; border:0; border-radius:8px; padding:10px 14px; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--ink); border:1px solid #8d97b055; }
+  button.rec { background:#ff4d6d; color:#fff; }
+  .row { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .student { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid #8d97b022; }
+  .student:last-child { border:0; }
+  .face { font-size:2rem; } .name { font-weight:700; } .role { color:var(--mute); font-size:.8rem; }
+  .q { margin:4px 0; min-height:1.5em; }
+  .bar { height:6px; background:#8d97b033; border-radius:3px; overflow:hidden; }
+  .bar > i { display:block; height:100%; background:var(--ok); width:0; transition:width .4s; }
+  #status { color:var(--mute); font-size:.85rem; min-height:1.3em; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎓 Reverse Classroom</h1>
+  <span class="tag">Theory → Practice → Workshop → <b>Teach</b> · <span id="model"></span></span>
+</header>
+<main>
+  <section class="panel">
+    <label for="topic">Topic you're teaching</label>
+    <input id="topic" value="Functions and scope in Python">
+    <label for="code" style="margin-top:10px">Shared screen (paste your Python)</label>
+    <textarea id="code" class="code" spellcheck="false">def average_load(readings):
+    total = 0
+    for r in readings:
+        total += r
+    return total / len(readings)
+
+meter_kwh = [12.5, 14.0, 13.2]
+print(average_load(meter_kwh))</textarea>
+    <label for="say" style="margin-top:10px">Explain it (speak or type)</label>
+    <textarea id="say" class="say" placeholder="This function takes a list of meter readings, adds them up in a loop, then divides by how many there are…"></textarea>
+    <div class="row">
+      <button id="mic" class="ghost">🎙️ Hold to talk</button>
+      <button id="send">Teach →</button>
+      <button id="stop" class="ghost">🔇 Mute</button>
+    </div>
+    <div id="status"></div>
+  </section>
+  <section class="panel" id="students"></section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const sessionId = localStorage.getItem("rc-session") || (crypto.randomUUID?.() ?? String(Date.now()));
+try { localStorage.setItem("rc-session", sessionId); } catch {}
+let cfg;
+
+async function init() {
+  cfg = await (await fetch("/api/config")).json();
+  $("model").textContent = "running " + cfg.model + (cfg.elevenlabs ? " · ElevenLabs voices" : " · browser voices");
+  $("students").innerHTML = Object.entries(cfg.students).map(([id, s]) => `
+    <div class="student" id="s-${id}"><div class="face">${s.emoji}</div><div style="flex:1">
+      <div class="name">${s.name} <span class="role">${s.role}</span></div>
+      <div class="q">Waiting for you to teach…</div>
+      <div class="bar"><i></i></div></div></div>`).join("");
+}
+
+const voices = { maya: { pitch: 1.2, rate: 1.05 }, kofi: { pitch: 0.7, rate: 0.95 }, zee: { pitch: 1.5, rate: 0.9 } };
+let queue = Promise.resolve();
+function speak(id, text) {
+  queue = queue.then(async () => {
+    if (muted) return;
+    if (cfg.elevenlabs) {
+      const r = await fetch("/api/tts", { method: "POST", body: JSON.stringify({ student: id, text }) });
+      if (r.ok) {
+        const a = new Audio(URL.createObjectURL(await r.blob()));
+        return new Promise((ok) => { a.onended = ok; a.onerror = ok; a.play().catch(ok); });
+      }
+    }
+    return new Promise((ok) => {
+      const u = new SpeechSynthesisUtterance(text); Object.assign(u, voices[id]);
+      u.onend = ok; u.onerror = ok; speechSynthesis.speak(u);
+    });
+  });
+}
+let muted = false;
+$("stop").onclick = () => { muted = !muted; speechSynthesis.cancel(); $("stop").textContent = muted ? "🔊 Unmute" : "🔇 Mute"; };
+
+async function teach() {
+  const utterance = $("say").value.trim();
+  if (!utterance) return;
+  $("status").textContent = "Students are thinking…"; $("send").disabled = true;
+  try {
+    const r = await fetch("/api/turn", { method: "POST", body: JSON.stringify({
+      sessionId, topic: $("topic").value, code: $("code").value, utterance }) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error);
+    for (const rep of data.replies) {
+      const el = $("s-" + rep.id);
+      el.querySelector(".q").textContent = rep.question;
+      el.querySelector(".bar i").style.width = rep.understanding * 10 + "%";
+      speak(rep.id, rep.question);
+    }
+    $("say").value = ""; $("status").textContent = "Answer them — what would you say?";
+  } catch (e) { $("status").textContent = "Error: " + e.message + " (is Ollama running?)"; }
+  $("send").disabled = false;
+}
+$("send").onclick = teach;
+
+// Voice in: Web Speech API (Chrome/Edge/Safari). Hold button to talk.
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SR) { $("mic").disabled = true; $("mic").title = "Speech recognition not supported in this browser"; }
+else {
+  const rec = new SR(); rec.continuous = true; rec.interimResults = true; rec.lang = "en-US";
+  let base = "";
+  rec.onresult = (e) => { $("say").value = base + [...e.results].map((r) => r[0].transcript).join(" "); };
+  rec.onend = () => $("mic").classList.remove("rec");
+  const start = () => { speechSynthesis.cancel(); base = $("say").value ? $("say").value + " " : ""; $("mic").classList.add("rec"); try { rec.start(); } catch {} };
+  const stop = () => { rec.stop(); setTimeout(() => $("say").value.trim() && teach(), 600); };
+  $("mic").addEventListener("pointerdown", start); $("mic").addEventListener("pointerup", stop);
+}
+init();
+</script>
+</body>
+</html>
