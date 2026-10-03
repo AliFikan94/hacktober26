@@ -113,7 +113,7 @@ async function teach() {
       speak(rep.id, rep.question);
     }
     $("say").value = ""; $("status").textContent = "Answer them — what would you say?";
-  } catch (e) { $("status").textContent = "Error: " + e.message + " (is Ollama running?)"; }
+  } catch (e) { $("status").textContent = "Error: " + e.message + " (Check: Ollama running? Model name right? Header shows the model in use.)"; }
   $("send").disabled = false;
 }
 $("send").onclick = teach;
