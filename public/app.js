@@ -27,7 +27,10 @@ const baseSession = store.get("tb-session", null) || (crypto.randomUUID?.() ?? S
 store.set("tb-session", baseSession);
 
 const isDone = (lid, p) => !!progress[lid]?.[p];
-function markDone(lid, p) { (progress[lid] ??= {})[p] = true; store.set("tb-progress", progress); updateRing(); }
+function markDone(lid, p) {
+  const was = !!progress[lid]?.[p]; (progress[lid] ??= {})[p] = true; store.set("tb-progress", progress);
+  touchDay(); updateRing(); renderSide(); if (!was) checkMilestones(lid, p);
+}
 const stepsDone = () => lessons.reduce((n, l) => n + PHASES.filter((p) => isDone(l.id, p)).length, 0);
 function nextTarget() { for (const l of lessons) for (const p of PHASES) if (!isDone(l.id, p)) return { l, p }; return null; }
 function updateRing() { const f = stepsDone() / (lessons.length * 4 || 1); $("ring").style.strokeDashoffset = 75.4 * (1 - f); }
@@ -71,14 +74,16 @@ async function init() {
   const saved = store.get("tb-model", null);
   if (saved && saved !== cfg.model) { await fetch("/api/model", { method: "POST", body: JSON.stringify({ model: saved }) }); await loadConfig(); }
   lessons = course.modules.flatMap((m) => m.lessons);
-  updatePill(); updateRing(); if (!cfg.ready) startPoll();
+  updatePill(); updateRing(); initSide(); if (!cfg.ready) startPoll();
   addEventListener("hashchange", route); route();
 }
 function route() {
   cleanup(); cleanup = () => {};
   const [, area, id, ph] = location.hash.split("/");
   const l = area === "lesson" && lessons.find((x) => x.id === id);
-  if (l) lessonPage(l, PHASES.includes(ph) ? ph : (PHASES.find((p) => !isDone(l.id, p)) ?? "theory"));
+  closeDrawer(); renderSide();
+  if (area === "certificate") { renderedLesson = null; certificatePage(); }
+  else if (l) lessonPage(l, PHASES.includes(ph) ? ph : (PHASES.find((p) => !isDone(l.id, p)) ?? "theory"));
   else { renderedLesson = null; homePage(); }
 }
 const go = (hash) => { location.hash = hash; };
@@ -88,9 +93,10 @@ function homePage() {
   const t = nextTarget(), done = stepsDone(), total = lessons.length * 4, hr = new Date().getHours();
   const started = done > 0;
   $("view").innerHTML = `<div class="page">
-    <p class="eyebrow">${esc(course.title)}</p>
+    <p class="eyebrow">${getName() ? `Welcome${started ? " back" : ""}, ${esc(getName())}` : esc(course.title)}</p>
     <h1 class="display">Learn it.<br><em>Then teach it back.</em></h1>
     <p class="lede">Read a short lesson, write a little code, then explain it out loud to three curious students. If you can make them understand, you really understand it.</p>
+    ${getName() ? "" : `<form class="namebox" id="nameform"><input id="nm" placeholder="What should we call you? (shown on your certificate)" maxlength="40" aria-label="Your name"><button class="btn soft" type="submit">Save</button></form>`}
     ${t ? `<div class="continue"><div><small>${started ? (hr < 12 ? "Good morning · pick up where you left off" : "Pick up where you left off") : "Start here"}</small><strong>${esc(t.l.title)} · ${PHASE_LABEL[t.p]}</strong></div>
       <button class="btn" id="cont">${started ? "Continue" : "Begin"}</button></div>`
       : `<div class="continue"><div><small>All done</small><strong>You finished the whole course.</strong></div></div>`}
@@ -102,6 +108,7 @@ function homePage() {
     }).join("")}</div>`).join("")}
   </div>`;
   if (t) $("cont").onclick = () => go(`#/lesson/${t.l.id}/${t.p}`);
+  if ($("nameform")) $("nameform").onsubmit = (e) => { e.preventDefault(); const v = $("nm").value.trim(); if (v) { store.set("tb-name", v); homePage(); } };
   scrollTo(0, 0);
 }
 
@@ -313,7 +320,7 @@ function viewTeach(l, stage) {
   let busy = false;
   async function send() {
     const text = say.value.trim(); if (busy || !text) return;
-    busy = true; stopSpeaking(); addYou(text); say.value = ""; autosize(); hint("The students are thinking…");
+    busy = true; { const st = store.get("tb-stats", { turns: 0 }); st.turns++; store.set("tb-stats", st); renderSide(); } stopSpeaking(); addYou(text); say.value = ""; autosize(); hint("The students are thinking…");
     const waits = {}, latest = {}; let failed = false;
     for (const id of ids) { waits[id] = addStudent(id, null, "wait"); setThinking(id, true); }
     try {
@@ -360,6 +367,163 @@ function viewTeach(l, stage) {
     try { rec.start(); recording = true; micUI(); hint("Listening… tap again to send", true); } catch {}
   };
   autosize(); say.focus({ preventScroll: true });
+}
+
+/* ================= identity, streak ================= */
+const getName = () => store.get("tb-name", "");
+const dayKey = (d = new Date()) => d.toISOString().slice(0, 10);
+function touchDay() { const d = store.get("tb-days", []); if (!d.includes(dayKey())) { d.push(dayKey()); store.set("tb-days", d.slice(-400)); } }
+function streak() {
+  const d = new Set(store.get("tb-days", [])), t = new Date(); let n = 0;
+  if (!d.has(dayKey(t))) t.setDate(t.getDate() - 1);
+  while (d.has(dayKey(t))) { n++; t.setDate(t.getDate() - 1); }
+  return n;
+}
+const lessonComplete = (l) => PHASES.every((p) => isDone(l.id, p));
+const courseComplete = () => lessons.every(lessonComplete);
+
+/* ================= sidebar ================= */
+const mq = matchMedia("(max-width: 900px)");
+function initSide() {
+  if (store.get("tb-side-collapsed", false) && !mq.matches) $("shell").classList.add("collapsed");
+  $("sidebtn").onclick = () => {
+    if (mq.matches) { const o = $("side").classList.toggle("open"); document.body.classList.toggle("drawer", o); }
+    else { const c = $("shell").classList.toggle("collapsed"); store.set("tb-side-collapsed", c); }
+  };
+  $("scrim").onclick = closeDrawer;
+  renderSide();
+}
+function closeDrawer() { $("side")?.classList.remove("open"); document.body.classList.remove("drawer"); }
+function renderSide() {
+  if (!course) return;
+  const done = stepsDone(), total = lessons.length * 4, C = 2 * Math.PI * 22, cur = location.hash.split("/")[2], st = store.get("tb-stats", { turns: 0 }), sk = streak();
+  const ready = courseComplete();
+  $("side").innerHTML = `<div class="side-top"><svg class="ring-lg" viewBox="0 0 52 52"><circle class="t" cx="26" cy="26" r="22"/><circle class="p" cx="26" cy="26" r="22" transform="rotate(-90 26 26)" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - done / total)}"/></svg>
+      <div><b>${done} of ${total} steps</b><span>${Math.round((done / total) * 100)}% of ${esc(course.title)}</span></div></div>
+    <div class="chips"><span class="chip ${sk ? "hot" : ""}">${sk ? sk + (sk === 1 ? "-day streak" : "-day streak") : "Start a streak today"}</span><span class="chip">${st.turns} ${st.turns === 1 ? "explanation" : "explanations"}</span></div>
+    ${course.modules.map((m) => `<h4>${esc(m.title)}<em>${m.lessons.filter(lessonComplete).length}/${m.lessons.length}</em></h4>` + m.lessons.map((l) =>
+      `<a class="sl ${l.id === cur ? "active" : ""} ${lessonComplete(l) ? "full" : ""}" href="#/lesson/${l.id}"><span class="n">${lessonComplete(l) ? "✓" : lessons.indexOf(l) + 1}</span><span class="tt">${esc(l.title)}</span><span class="pips">${PHASES.map((p) => `<i class="${isDone(l.id, p) ? "on" : ""}"></i>`).join("")}</span></a>`).join("")).join("")}
+    <a class="cert-row ${ready ? "ready" : ""}" href="#/certificate">${svg('<circle cx="12" cy="9" r="6"/><path d="M8.5 14l-1.5 7 5-3 5 3-1.5-7"/>')}<div><b>Certificate</b><span>${ready ? "Ready. Claim yours" : `Unlocks at ${total} steps`}</span></div></a>`;
+}
+
+/* ================= share cards (SVG -> PNG) ================= */
+let svgSeq = 0;
+const ORBS = (id, cx, cy, r) => ["maya", "kofi", "zee"].map((k, i) => {
+  const c = { maya: "#e9a23b", kofi: "#5a8dee", zee: "#43b58a" }[k], gid = `${id}${k}`;
+  return `<defs><radialGradient id="${gid}" cx=".32" cy=".26" r=".85"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".5" stop-color="${c}"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></radialGradient></defs>
+    <circle cx="${cx + i * r * 1.25}" cy="${cy}" r="${r}" fill="${c}"/><circle cx="${cx + i * r * 1.25}" cy="${cy}" r="${r}" fill="url(#${gid})"/>`;
+}).join("");
+const wrap = (t, n) => { const out = []; let line = ""; for (const w of String(t).split(" ")) { if ((line + " " + w).trim().length > n) { out.push(line); line = w; } else line = (line + " " + w).trim(); } if (line) out.push(line); return out.slice(0, 3); };
+const SERIF = "ui-serif, 'New York', Georgia, serif", SANS = "-apple-system, 'Segoe UI', system-ui, sans-serif";
+
+function cardSVG(m) {
+  const id = "c" + ++svgSeq, hl = wrap(m.headline, m.headline.length > 26 ? 24 : 18), size = hl.length > 1 ? 72 : 88, sub = wrap(m.sub, 52);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630"><rect width="1200" height="630" fill="#0c0c0d"/>
+    <ellipse cx="1000" cy="120" rx="420" ry="300" fill="#e9a23b" opacity=".07"/><ellipse cx="160" cy="620" rx="420" ry="260" fill="#5a8dee" opacity=".07"/>
+    <text x="80" y="110" font-family="${SANS}" font-size="26" font-weight="700" fill="#f5f5f7" letter-spacing="-.5">Teach<tspan font-family="${SERIF}" font-style="italic" font-weight="500" font-size="30">Back</tspan></text>
+    <text x="80" y="200" font-family="${SANS}" font-size="22" font-weight="600" fill="#98989d" letter-spacing="3">${esc(m.title.toUpperCase())}</text>
+    ${hl.map((ln, i) => `<text x="80" y="${290 + i * (size + 8)}" font-family="${SERIF}" font-size="${size}" font-weight="600" fill="#f5f5f7" letter-spacing="-2">${esc(ln)}</text>`).join("")}
+    ${sub.map((ln, i) => `<text x="80" y="${290 + hl.length * (size + 8) + 20 + i * 36}" font-family="${SERIF}" font-size="28" fill="#98989d">${esc(ln)}</text>`).join("")}
+    ${ORBS(id, 880, 520, 46)}
+    <text x="80" y="580" font-family="${SANS}" font-size="22" fill="#636366">Learn it. Then teach it back. · Open-source AI · #Hacktoberfest</text></svg>`;
+}
+const fmtDate = (iso) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+function certId(name, iso) { let h = 2166136261; for (const c of name + iso + lessons.length) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } const t = (h >>> 0).toString(36).toUpperCase().padStart(8, "0"); return `TB-${t.slice(0, 4)}-${t.slice(4, 8)}`; }
+function certSVG(name, iso) {
+  const id = "z" + ++svgSeq, st = store.get("tb-stats", { turns: 0 }), nm = name || "Your Name", nsz = nm.length > 24 ? 64 : 84;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 850" width="1200" height="850"><rect width="1200" height="850" fill="#fbfaf6"/>
+    <rect x="34" y="34" width="1132" height="782" rx="6" fill="none" stroke="#1d1d1f" stroke-width="2"/><rect x="48" y="48" width="1104" height="754" rx="3" fill="none" stroke="#1d1d1f" stroke-opacity=".25" stroke-width="1"/>
+    ${ORBS(id, 540, 150, 24)}
+    <text x="600" y="232" text-anchor="middle" font-family="${SANS}" font-size="26" font-weight="700" fill="#1d1d1f" letter-spacing="-.5">Teach<tspan font-family="${SERIF}" font-style="italic" font-weight="500" font-size="30">Back</tspan></text>
+    <text x="600" y="320" text-anchor="middle" font-family="${SERIF}" font-size="60" font-weight="600" fill="#1d1d1f" letter-spacing="-1.5">Certificate of Completion</text>
+    <text x="600" y="385" text-anchor="middle" font-family="${SERIF}" font-size="24" font-style="italic" fill="#6e6e73">This certifies that</text>
+    <text x="600" y="480" text-anchor="middle" font-family="${SERIF}" font-size="${nsz}" font-style="italic" font-weight="500" fill="#1d1d1f" letter-spacing="-1">${esc(nm)}</text>
+    <line x1="300" y1="508" x2="900" y2="508" stroke="#1d1d1f" stroke-opacity=".3"/>
+    <text x="600" y="565" text-anchor="middle" font-family="${SERIF}" font-size="26" fill="#1d1d1f">completed <tspan font-weight="700">${esc(course.title)}</tspan></text>
+    <text x="600" y="606" text-anchor="middle" font-family="${SERIF}" font-size="22" fill="#6e6e73">${lessons.length} lessons, each taught back out loud to three AI students</text>
+    <text x="600" y="640" text-anchor="middle" font-family="${SERIF}" font-size="22" fill="#6e6e73">${st.turns} explanations given · Theory, Practice, Workshop and Teach complete</text>
+    <text x="150" y="738" font-family="${SANS}" font-size="16" fill="#6e6e73" letter-spacing="1">DATE</text><text x="150" y="766" font-family="${SERIF}" font-size="24" fill="#1d1d1f">${esc(fmtDate(iso))}</text>
+    <text x="1050" y="738" text-anchor="end" font-family="${SANS}" font-size="16" fill="#6e6e73" letter-spacing="1">CERTIFICATE ID</text><text x="1050" y="766" text-anchor="end" font-family="${SANS}" font-size="22" font-weight="600" fill="#1d1d1f" letter-spacing="1">${certId(nm, iso)}</text>
+    <text x="600" y="790" text-anchor="middle" font-family="${SANS}" font-size="13" fill="#a1a1a6">Self-paced learning certificate issued by TeachBack. Not an accredited qualification.</text></svg>`;
+}
+async function svgToPng(str, w, h) {
+  const url = URL.createObjectURL(new Blob([str], { type: "image/svg+xml;charset=utf-8" })), img = new Image();
+  await new Promise((ok, no) => { img.onload = ok; img.onerror = no; img.src = url; });
+  const c = document.createElement("canvas"); c.width = w; c.height = h; const g = c.getContext("2d"); g.drawImage(img, 0, 0, w, h); URL.revokeObjectURL(url);
+  return new Promise((ok) => c.toBlob(ok, "image/png"));
+}
+function saveBlob(blob, name) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+
+/* ================= sharing ================= */
+const shareUrl = () => cfg.shareUrl || location.origin;
+function shareButtons(text, svgStr, w, h, file) {
+  const u = encodeURIComponent(shareUrl()), t = encodeURIComponent(text);
+  const links = [["X", `https://twitter.com/intent/tweet?text=${t}&url=${u}`], ["LinkedIn", `https://www.linkedin.com/sharing/share-offsite/?url=${u}`], ["WhatsApp", `https://wa.me/?text=${encodeURIComponent(text + " " + shareUrl())}`]];
+  return `<div class="sharerow">${navigator.share ? `<button class="btn" data-a="native">Share…</button>` : ""}
+    ${links.map(([n, h2]) => `<a class="btn soft" href="${h2}" target="_blank" rel="noopener">${n}</a>`).join("")}
+    <button class="btn soft" data-a="copy">Copy text</button><button class="btn soft" data-a="img">Save image</button></div>`;
+}
+function wireShare(root, text, svgStr, w, h, file) {
+  root.querySelectorAll("[data-a]").forEach((b) => (b.onclick = async () => {
+    const a = b.dataset.a, orig = b.textContent;
+    try {
+      if (a === "img") saveBlob(await svgToPng(svgStr, w, h), file);
+      else if (a === "copy") { await navigator.clipboard.writeText(text + " " + shareUrl()); b.textContent = "Copied ✓"; setTimeout(() => (b.textContent = orig), 1500); }
+      else if (a === "native") {
+        const png = await svgToPng(svgStr, w, h), f = new File([png], file, { type: "image/png" });
+        const data = { text, url: shareUrl(), title: "TeachBack" }; if (navigator.canShare?.({ files: [f] })) data.files = [f];
+        await navigator.share(data);
+      }
+    } catch (e) { if (e?.name !== "AbortError") { b.textContent = "Couldn't. Try Save image"; setTimeout(() => (b.textContent = orig), 2200); } }
+  }));
+}
+
+/* ================= milestones ================= */
+function checkMilestones(lid, phase) {
+  const l = lessons.find((x) => x.id === lid), m = course.modules.find((x) => x.lessons.includes(l)), seen = store.get("tb-milestones", {}), found = [];
+  if (lessonComplete(l) && !seen["l:" + lid]) { seen["l:" + lid] = 1; found.push({ kind: "lesson", title: "Lesson complete", headline: l.title, sub: `I just finished "${l.title}" on TeachBack by teaching it back to three AI students.`, line: "Theory, Practice, Workshop and Teach: all done." }); }
+  if (m.lessons.every(lessonComplete) && !seen["m:" + m.id]) { seen["m:" + m.id] = 1; found.push({ kind: "module", title: "Module complete", headline: m.title, sub: `I finished the "${m.title}" module of ${course.title} on TeachBack.`, line: `You've completed every lesson in ${m.title}.` }); }
+  if (courseComplete() && !seen.course) { seen.course = 1; if (!store.get("tb-completed", "")) store.set("tb-completed", new Date().toISOString()); found.push({ kind: "course", title: "Course complete", headline: course.title, sub: `I completed ${course.title} on TeachBack: learn it, then teach it back to three AI students.`, line: "Every lesson, taught back out loud. Your certificate is ready." }); }
+  if (!found.length) return;
+  store.set("tb-milestones", seen);
+  const top = found[found.length - 1]; setTimeout(() => showMilestone(top), phase === "teach" ? 1600 : 400);
+}
+function showMilestone(m) {
+  const svgStr = cardSVG(m), text = m.sub + " #Hacktoberfest #OpenSource", modal = $("modal");
+  modal.classList.remove("hidden");
+  modal.innerHTML = `<div class="sheet"><div class="card">${svgStr}</div><h2>${esc(m.title)}</h2><p>${esc(m.line)} Share it with someone who'd love to learn too.</p>
+    ${shareButtons(text)}<div class="acts"><button class="link" id="later">Maybe later</button>${m.kind === "course" ? `<button class="btn" id="getcert">View certificate</button>` : `<button class="btn" id="keep">Keep going</button>`}</div></div>`;
+  wireShare(modal, text, svgStr, 1200, 630, `teachback-${m.kind}.png`);
+  const close = () => { modal.classList.add("hidden"); modal.innerHTML = ""; };
+  modal.onclick = (e) => e.target === modal && close(); $("later").onclick = close;
+  if ($("keep")) $("keep").onclick = close; if ($("getcert")) $("getcert").onclick = () => { close(); go("#/certificate"); };
+  addEventListener("keydown", function esc1(e) { if (e.key === "Escape") { close(); removeEventListener("keydown", esc1); } });
+}
+
+/* ================= certificate ================= */
+function certificatePage() {
+  const done = stepsDone(), total = lessons.length * 4;
+  if (!courseComplete()) {
+    $("view").innerHTML = `<div class="page"><p class="eyebrow">Certificate</p><h1 class="display">Earn it by <em>teaching</em>.</h1>
+      <div class="locked"><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="margin:auto"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+      <h2>${done} of ${total} steps done</h2><p>Finish every lesson, including teaching it back to all three students, and your certificate unlocks here.</p><button class="btn" id="cont">Continue learning</button></div></div>`;
+    $("cont").onclick = () => { const t = nextTarget(); go(t ? `#/lesson/${t.l.id}/${t.p}` : "#/"); }; return;
+  }
+  const iso = store.get("tb-completed", "") || (store.set("tb-completed", new Date().toISOString()), store.get("tb-completed", ""));
+  $("view").innerHTML = `<div class="page wide" style="max-width:1000px"><p class="eyebrow noprint">Certificate</p><h1 class="display noprint">You did it${getName() ? ", " + esc(getName().split(" ")[0]) : ""}.</h1>
+    <div class="certbar noprint"><input id="nm" value="${esc(getName())}" placeholder="Your name as it should appear" maxlength="40" aria-label="Name on certificate"></div>
+    <div class="certwrap" id="cert"></div>
+    <div class="certbar noprint"><button class="btn" id="dl">Download image</button><button class="btn soft" id="pr">Save as PDF / Print</button></div>
+    <div class="noprint" id="sh"></div></div>`;
+  const draw = () => {
+    const name = getName(), svgStr = certSVG(name, iso), text = `I completed ${course.title} on TeachBack and taught every lesson back to three AI students. #Hacktoberfest #OpenSource`;
+    $("cert").innerHTML = svgStr; $("sh").innerHTML = shareButtons(text);
+    wireShare($("sh"), text, svgStr, 1200, 850, "teachback-certificate.png");
+    $("dl").onclick = async () => saveBlob(await svgToPng(svgStr, 2400, 1700), "teachback-certificate.png");
+  };
+  $("pr").onclick = () => print();
+  let tm; $("nm").oninput = (e) => { store.set("tb-name", e.target.value.trim()); clearTimeout(tm); tm = setTimeout(draw, 250); };
+  draw(); scrollTo(0, 0);
 }
 
 init();

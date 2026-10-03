@@ -32,10 +32,17 @@ Use Chrome/Edge/Safari for the hold-to-talk mic. Click "Teach →" or release th
 |---|---|
 | `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` | Any OpenAI-compatible endpoint (default `http://localhost:11434/v1`, `gemma2:9b`) |
 | `MONGODB_URI` | Persist sessions in MongoDB Atlas (default: local `data/sessions.json`) |
+| `SHARE_URL` | Link included when sharing milestones (default: this repo) |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_MAYA/KOFI/ZEE` | ElevenLabs voices (default: browser voices) |
 
 ## Experience
 Calm, monochrome interface (system fonts, serif for reading). Colour appears only in the three students, shown as softly breathing orbs with a ring that fills as they understand. One clear "Continue" action per step. In the classroom, replies stream in as each student finishes, are spoken aloud, and the conversation is saved per lesson. Tap the mic to talk, tap again to send. Python errors get a plain-English explanation. The header pill shows the AI model and whether it runs on this device or in the cloud, and lets you switch models.
+
+## Progress, certificate and sharing
+- **Sidebar:** steps complete, streak, explanations given, and every lesson with four progress pips. Collapsible on desktop, a drawer on mobile.
+- **Milestones:** finishing a lesson, a module, or the course opens a celebration card with a ready-to-post 1200x630 image and share buttons (native share sheet, X, LinkedIn, WhatsApp, copy text, save image).
+- **Certificate:** unlocks at 28/28 steps, uses the learner's name, has a unique ID, and exports as PNG or PDF (print). It is a self-paced completion certificate, not an accredited qualification. Shares link to `SHARE_URL` (default: this repo).
+- Everything is stored in the browser (localStorage); no accounts, no tracking.
 
 ## Syllabus
 `curriculum/python.json`: 3 modules, 7 lessons (variables, numbers, conditionals, functions, loops/lists, dicts, error handling), all using electricity-distribution examples. Add a lesson by adding an object; no code changes needed. Progress is stored in the browser. A lesson's Teach step completes automatically when all three students score 7+/10.

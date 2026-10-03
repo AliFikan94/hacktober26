@@ -41,7 +41,7 @@ createServer(async (req, res) => {
       return res.end(await readFile(join("public", rel)));
     }
     if (req.method === "GET" && url.pathname === "/api/config") {
-      return send(res, 200, { model: MODEL, ready, modelError, students: STUDENTS, elevenlabs: !!process.env.ELEVENLABS_API_KEY });
+      return send(res, 200, { model: MODEL, ready, modelError, students: STUDENTS, elevenlabs: !!process.env.ELEVENLABS_API_KEY, shareUrl: process.env.SHARE_URL ?? "https://github.com/alifikan94/hacktober26" });
     }
     if (req.method === "GET" && url.pathname === "/api/models") {
       try {
