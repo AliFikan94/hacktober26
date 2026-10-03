@@ -34,12 +34,20 @@ Use Chrome/Edge/Safari for the hold-to-talk mic. Click "Teach →" or release th
 |---|---|
 | `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` | Any OpenAI-compatible endpoint (default `http://localhost:11434/v1`, `gemma3:4b`) |
 | `MONGODB_URI` | Persist sessions in MongoDB Atlas (default: local `data/sessions.json`) |
+| `EXAMINER_MODEL` | Optional separate model for judging explanations |
 | `HOSTED=1` | Public deployment mode: model switching off, rate limits on (see `render.yaml`, untested) |
 | `SHARE_URL` | Link included when sharing milestones (default: this repo) |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_MAYA/KOFI/ZEE` | ElevenLabs voices (default: browser voices) |
 
 ## Experience
 Calm, monochrome interface (system fonts, serif for reading). Colour appears only in the three students, shown as softly breathing orbs with a ring that fills as they understand. One clear "Continue" action per step. In the classroom, replies stream in as each student finishes, are spoken aloud, and the conversation is saved per lesson. Tap the mic to talk, tap again to send. Python errors get a plain-English explanation. The header pill shows the AI model and whether it runs on this device or in the cloud, and lets you switch models.
+
+## Low-memory computers
+A 4B model needs about 4 GB of free RAM. TeachBack checks each installed model's size against your free memory and automatically uses one that fits (biggest local Gemma first, then any local model, then a cloud model, which it tells you about). On a small PC, pull the tiny Gemma and it will be chosen automatically:
+```bash
+ollama pull gemma3:1b
+```
+Small models are weaker at strict JSON and at judging, so run `npm run doctor`. You can use a stronger model only for the examiner with `EXAMINER_MODEL` (note that sends what you say to that model's server if it's a cloud model).
 
 ## How "teach it back" is judged
 Each lesson has 3 key ideas (`rubric` in `curriculum/python.json`). A separate **examiner** agent checks, after every explanation, which ideas you covered correctly in your own words. It must **quote you word for word**, and the server rejects any quote that is not really in what you said, so the model cannot hallucinate mastery. The students are told which ideas are still missing and steer their questions there. The lesson completes when all ideas are covered. (After 8 explanations an "Finish anyway" escape hatch appears; the certificate then reports how many lessons were examiner-verified.)

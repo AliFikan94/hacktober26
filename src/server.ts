@@ -5,7 +5,7 @@ import { classroomTurn, examineTurn, type RubricPoint } from "./classroom.js";
 import { MODEL, STUDENTS, agents, setModel } from "./students.js";
 import { loadSession, saveTurn } from "./store.js";
 import { ddgSearch } from "./search.js";
-import { OLLAMA, installedModels, autoSelect, isCloudName } from "./models.js";
+import { OLLAMA, installedModels, autoSelect, isCloudName, names, friendlyModelError } from "./models.js";
 
 console.log("Starting TeachBack…");
 process.on("exit", (c) => console.log(`TeachBack stopped (code ${c}).`));
@@ -36,13 +36,13 @@ async function warm() {
   if (warming) return;
   warming = true; const mine = epoch;
   try {
-    const names = await installedModels(), old = MODEL, sel = autoSelect(names, userPicked);
-    if (sel.switchedTo) console.log(`Model "${old}" isn't installed, so using "${sel.switchedTo}"${isCloudName(sel.switchedTo) ? " (a cloud model: it runs on Ollama's servers)" : ""}. For a private local model run: ollama pull gemma3:4b`);
-    if (sel.missing) { modelError = `"${MODEL}" isn't installed. Installed: ${names?.join(", ") || "nothing"}.`; ready = false; nextTry = Date.now() + (backoff = Math.min(backoff * 2, 30000)); return; }
+    const list = await installedModels(), old = MODEL, sel = autoSelect(list, userPicked);
+    if (sel.switchedTo) console.log(`Model "${old}" ${sel.reason === "memory" ? "needs more memory than this computer has free" : "isn't installed"}, so using "${sel.switchedTo}"${isCloudName(sel.switchedTo) ? " (a cloud model: it runs on Ollama's servers)" : ""}. For a private local model on a small PC run: ollama pull gemma3:1b`);
+    if (sel.missing) { modelError = `"${MODEL}" isn't installed. Installed: ${list ? names(list).join(", ") || "nothing" : "(can't reach Ollama)"}.`; ready = false; nextTry = Date.now() + (backoff = Math.min(backoff * 2, 30000)); return; }
     await agents.maya.generate("Reply with the single word: OK");
     if (mine === epoch) { ready = true; modelError = ""; backoff = 5000; }
   } catch (e) {
-    if (mine === epoch) { ready = false; modelError = String((e as Error).message ?? e).split("\n")[0].slice(0, 200); nextTry = Date.now() + (backoff = Math.min(backoff * 2, 30000)); }
+    if (mine === epoch) { ready = false; modelError = friendlyModelError(String((e as Error).message ?? e)); nextTry = Date.now() + (backoff = Math.min(backoff * 2, 30000)); }
   } finally { warming = false; }
 }
 void warm(); setInterval(() => { if (!ready && Date.now() >= nextTry) void warm(); }, 2000).unref();

@@ -8,6 +8,7 @@ const provider = createOpenAICompatible({
   baseURL: process.env.LLM_BASE_URL ?? "http://localhost:11434/v1",
   apiKey: process.env.LLM_API_KEY ?? "ollama",
 });
+export const EXAMINER_MODEL = process.env.EXAMINER_MODEL; // optional: use a stronger model just for judging
 export let MODEL = process.env.LLM_MODEL ?? "gemma3:4b";
 
 const RULES = `
@@ -47,7 +48,7 @@ Mark an idea covered ONLY if the teacher explained it correctly in their own wor
 For covered ideas give a "quote": 10 to 120 characters copied EXACTLY, word for word, from the teacher's words. Never invent quotes.
 Reply with ONLY a JSON object, no markdown fences.`;
 function build() {
-  examiner.agent = quiet(new Agent({ id: "examiner", name: "Examiner", instructions: EXAMINER, model: provider(MODEL) }));
+  examiner.agent = quiet(new Agent({ id: "examiner", name: "Examiner", instructions: EXAMINER, model: provider(EXAMINER_MODEL ?? MODEL) }));
   for (const [id, s] of Object.entries(STUDENTS)) {
     agents[id as StudentId] = quiet(new Agent({ id, name: s.name, instructions: s.instructions, model: provider(MODEL) }));
   }

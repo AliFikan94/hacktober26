@@ -2,23 +2,23 @@
 import { readFile } from "node:fs/promises";
 import { classroomTurn, examineTurn, generateJson, tryParseReply, studentPrompt, type RubricPoint } from "./classroom.js";
 import { MODEL, agents, STUDENTS, type StudentId } from "./students.js";
-import { OLLAMA, installedModels, autoSelect, isCloudName } from "./models.js";
+import { OLLAMA, installedModels, autoSelect, isCloudName, names, friendlyModelError, freeBytes } from "./models.js";
 
 const ok = (s: string) => console.log("  ✓ " + s), bad = (s: string) => console.log("  ✗ " + s), warn = (s: string) => console.log("  ! " + s);
-const short = (e: unknown) => String((e as Error)?.message ?? e).split("\n")[0].slice(0, 160);
+const short = (e: unknown) => friendlyModelError(String((e as Error)?.message ?? e));
 
 console.log("\nTeachBack doctor\n");
 console.log("1. Is the model server reachable, and which model will be used?");
-const names = await installedModels();
-if (!names) { bad(`Can't reach Ollama at ${OLLAMA}. Open the Ollama app and try again.`); process.exit(1); }
-ok(`Ollama is running. Installed: ${names.join(", ") || "(none)"}`);
-const old = MODEL, sel = autoSelect(names);
-if (sel.switchedTo) ok(`"${old}" isn't installed, so using "${sel.switchedTo}" (the app does the same automatically).`);
+const list = await installedModels();
+if (!list) { bad(`Can't reach Ollama at ${OLLAMA}. Open the Ollama app and try again.`); process.exit(1); }
+ok(`Ollama is running. Installed: ${names(list).join(", ") || "(none)"}. Free memory: ${(freeBytes() / 2 ** 30).toFixed(1)} GiB`);
+const old = MODEL, sel = autoSelect(list);
+if (sel.switchedTo) ok(`"${old}" ${sel.reason === "memory" ? "is too big for your free memory" : "isn't installed"}, so using "${sel.switchedTo}" (the app does the same automatically).`);
 if (sel.missing) { bad(`"${MODEL}" isn't installed. Run: ollama pull gemma3:4b`); process.exit(1); }
 const model = sel.switchedTo ?? MODEL;
 ok(`Testing with: ${model}`);
 if (isCloudName(model)) warn("This is a cloud model: it runs on Ollama's servers, not your device. Fine to test, but don't claim 'fully local'.");
-if (!/gemma/i.test(model)) warn("Not a Gemma model, so this won't count toward the Gemma category. Run: ollama pull gemma3:4b");
+if (!/gemma/i.test(model)) warn("Not a Gemma model, so this won't count toward the Gemma category. On a small PC run: ollama pull gemma3:1b");
 
 const c = JSON.parse(await readFile("curriculum/python.json", "utf8"));
 const lesson = c.modules[0].lessons[0], rubric: RubricPoint[] = lesson.rubric;
