@@ -2,19 +2,23 @@
 import { readFile } from "node:fs/promises";
 import { classroomTurn, examineTurn, generateJson, tryParseReply, studentPrompt, type RubricPoint } from "./classroom.js";
 import { MODEL, agents, STUDENTS, type StudentId } from "./students.js";
+import { OLLAMA, installedModels, autoSelect, isCloudName } from "./models.js";
 
-const base = process.env.OLLAMA_HOST ?? (process.env.LLM_BASE_URL ?? "http://localhost:11434/v1").replace(/\/v1\/?$/, "");
 const ok = (s: string) => console.log("  ✓ " + s), bad = (s: string) => console.log("  ✗ " + s), warn = (s: string) => console.log("  ! " + s);
+const short = (e: unknown) => String((e as Error)?.message ?? e).split("\n")[0].slice(0, 160);
 
-console.log(`\nTeachBack doctor\nmodel: ${MODEL}\nendpoint: ${base}\n`);
-console.log("1. Is the model server reachable?");
-try {
-  const d = (await (await fetch(base + "/api/tags", { signal: AbortSignal.timeout(4000) })).json()) as { models: { name: string }[] };
-  ok(`Ollama is running. Installed: ${d.models.map((m) => m.name).join(", ") || "(none)"}`);
-  if (!d.models.some((m) => m.name === MODEL || m.name === MODEL + ":latest")) bad(`"${MODEL}" is not installed. Run: ollama pull ${MODEL}  (or set LLM_MODEL to one of the above)`);
-} catch { warn("Couldn't list models (not Ollama, or not running). Continuing anyway."); }
-if (/(^|[-:])cloud$/.test(MODEL)) warn("This is a cloud model: it runs on Ollama's servers, not your device. Fine to test, but don't claim 'fully local'.");
-if (!/gemma/i.test(MODEL)) warn("Not a Gemma model, so this won't count toward the Gemma category.");
+console.log("\nTeachBack doctor\n");
+console.log("1. Is the model server reachable, and which model will be used?");
+const names = await installedModels();
+if (!names) { bad(`Can't reach Ollama at ${OLLAMA}. Open the Ollama app and try again.`); process.exit(1); }
+ok(`Ollama is running. Installed: ${names.join(", ") || "(none)"}`);
+const old = MODEL, sel = autoSelect(names);
+if (sel.switchedTo) ok(`"${old}" isn't installed, so using "${sel.switchedTo}" (the app does the same automatically).`);
+if (sel.missing) { bad(`"${MODEL}" isn't installed. Run: ollama pull gemma3:4b`); process.exit(1); }
+const model = sel.switchedTo ?? MODEL;
+ok(`Testing with: ${model}`);
+if (isCloudName(model)) warn("This is a cloud model: it runs on Ollama's servers, not your device. Fine to test, but don't claim 'fully local'.");
+if (!/gemma/i.test(model)) warn("Not a Gemma model, so this won't count toward the Gemma category. Run: ollama pull gemma3:4b");
 
 const c = JSON.parse(await readFile("curriculum/python.json", "utf8"));
 const lesson = c.modules[0].lessons[0], rubric: RubricPoint[] = lesson.rubric;
@@ -31,14 +35,16 @@ for (const id of Object.keys(agents) as StudentId[]) {
     if (attempts === 1 && value) parsedFirstTry++;
     value ? ok(`${STUDENTS[id].name} (${((Date.now() - t) / 1000).toFixed(1)}s, ${attempts} attempt${attempts > 1 ? "s" : ""}): "${value.question}"  [understanding ${value.understanding}/10]`)
       : bad(`${STUDENTS[id].name}: no valid JSON even after retry`);
-  } catch (e) { bad(`${STUDENTS[id].name}: ${(e as Error).message}`); }
+  } catch (e) { bad(`${STUDENTS[id].name}: ${short(e)}`); }
 }
 console.log(`  → ${parsedFirstTry}/3 valid on the first try. Total ${((Date.now() - t0) / 1000).toFixed(1)}s for the three (they run in parallel in the app).`);
 
 console.log("\n3. Does the examiner judge fairly? It must reward a good explanation and refuse a bad one.");
+try {
 const g = await examineTurn(rubric, good), b = await examineTurn(rubric, bad2);
 (g.covered.length >= 2 ? ok : bad)(`Good explanation: covered ${g.covered.length}/${rubric.length} (${g.covered.join(", ") || "none"}). Expected 2 or 3.`);
 (b.covered.length === 0 ? ok : bad)(`Vague answer: covered ${b.covered.length}/${rubric.length}. Expected 0.`);
+} catch (e) { bad(`Examiner failed: ${short(e)}`); }
 
 console.log("\nIf everything above is ✓, you're good. If not, tune the prompts in src/students.ts or try a larger model.\n");
 process.exit(0);

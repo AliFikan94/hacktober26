@@ -5,9 +5,12 @@ import { classroomTurn, examineTurn, type RubricPoint } from "./classroom.js";
 import { MODEL, STUDENTS, agents, setModel } from "./students.js";
 import { loadSession, saveTurn } from "./store.js";
 import { ddgSearch } from "./search.js";
+import { OLLAMA, installedModels, autoSelect, isCloudName } from "./models.js";
 
+console.log("Starting TeachBack…");
+process.on("exit", (c) => console.log(`TeachBack stopped (code ${c}).`));
+process.on("unhandledRejection", (e) => console.error("Unexpected error:", (e as Error)?.message ?? e));
 const PORT = Number(process.env.PORT ?? 3000);
-const OLLAMA = (process.env.OLLAMA_HOST ?? (process.env.LLM_BASE_URL ?? "http://localhost:11434/v1").replace(/\/v1\/?$/, ""));
 const VOICES: Record<string, string | undefined> = {
   maya: process.env.ELEVENLABS_VOICE_MAYA, kofi: process.env.ELEVENLABS_VOICE_KOFI, zee: process.env.ELEVENLABS_VOICE_ZEE,
 };
@@ -28,29 +31,14 @@ const TYPES: Record<string, string> = { ".html": "text/html", ".css": "text/css"
 
 // Model warm-up: the first request to a local model can take a long time, so do it before the student needs it.
 // If the default model isn't installed, quietly pick a sensible installed one (unless LLM_MODEL was set on purpose).
-const explicitModel = !!process.env.LLM_MODEL;
 let ready = false, modelError = "", warming = false, epoch = 0, userPicked = false, nextTry = 0, backoff = 5000;
-async function installedModels(): Promise<string[] | null> {
-  try {
-    const d = (await (await fetch(OLLAMA + "/api/tags", { signal: AbortSignal.timeout(3000) })).json()) as { models?: { name: string }[] };
-    return (d.models ?? []).map((m) => m.name);
-  } catch { return null; }
-}
-const isCloudName = (n: string) => /(^|[-:])cloud$/.test(n);
-function pickModel(names: string[]): string | undefined {
-  const usable = names.filter((n) => !/embed/i.test(n));
-  return usable.find((n) => /gemma/i.test(n) && !isCloudName(n)) ?? usable.find((n) => !isCloudName(n)) ?? usable[0];
-}
 async function warm() {
   if (warming) return;
   warming = true; const mine = epoch;
   try {
-    const names = await installedModels();
-    if (names && !names.some((n) => n === MODEL || n === MODEL + ":latest")) {
-      const pick = !explicitModel && !userPicked ? pickModel(names) : undefined;
-      if (pick) { console.log(`Model "${MODEL}" isn't installed, so using "${pick}"${isCloudName(pick) ? " (a cloud model: it runs on Ollama's servers)" : ""}. For a private local model run: ollama pull gemma3:4b`); setModel(pick); }
-      else { modelError = `"${MODEL}" isn't installed. Installed: ${names.join(", ") || "nothing"}.`; ready = false; nextTry = Date.now() + (backoff = Math.min(backoff * 2, 30000)); return; }
-    }
+    const names = await installedModels(), old = MODEL, sel = autoSelect(names, userPicked);
+    if (sel.switchedTo) console.log(`Model "${old}" isn't installed, so using "${sel.switchedTo}"${isCloudName(sel.switchedTo) ? " (a cloud model: it runs on Ollama's servers)" : ""}. For a private local model run: ollama pull gemma3:4b`);
+    if (sel.missing) { modelError = `"${MODEL}" isn't installed. Installed: ${names?.join(", ") || "nothing"}.`; ready = false; nextTry = Date.now() + (backoff = Math.min(backoff * 2, 30000)); return; }
     await agents.maya.generate("Reply with the single word: OK");
     if (mine === epoch) { ready = true; modelError = ""; backoff = 5000; }
   } catch (e) {
