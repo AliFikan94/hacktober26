@@ -1,0 +1,91 @@
+{
+  "title": "Python for the Grid",
+  "subtitle": "Beginner Python taught through electricity-distribution examples",
+  "modules": [
+    {
+      "id": "basics", "title": "Python Basics",
+      "lessons": [
+        {
+          "id": "variables", "title": "Variables and data types",
+          "search": "python variables and data types for beginners",
+          "links": [{"title": "Python Tutorial: An Informal Introduction", "url": "https://docs.python.org/3/tutorial/introduction.html"}, {"title": "Built-in types (reference)", "url": "https://docs.python.org/3/library/stdtypes.html"}],
+          "theory": "<p>A <b>variable</b> is a label stuck on a value, like a tag on a transformer. <code>voltage = 230</code> sticks the tag <code>voltage</code> on the number 230.</p><p>Core types: <code>int</code> (whole numbers), <code>float</code> (decimals), <code>str</code> (text), <code>bool</code> (True/False). Use <code>type(x)</code> to check what you have.</p><p>Names are case-sensitive, can't start with a digit, and by convention use <code>snake_case</code>.</p>",
+          "example": "feeder_name = \"Ikeja-North\"\nvoltage_kv = 11.0\ncustomers = 1840\nis_energized = True\n\nprint(feeder_name, type(feeder_name))\nprint(voltage_kv, type(voltage_kv))\nprint(customers, type(customers))\nprint(is_energized, type(is_energized))",
+          "practice": {"prompt": "Create variables for a meter: its id (text), its reading in kWh (decimal) and whether it is prepaid (True/False). Print all three.", "starter": "# your code here\n"},
+          "workshop": {"title": "Meter Profile Printer", "brief": "Build a small program that prints a formatted profile for one meter: id, customer name, last reading, and tariff. Use at least one of each type.", "starter": "meter_id = \"MTR-0042\"\n# add customer, reading, tariff...\n\nprint(f\"Meter {meter_id}\")\n"},
+          "teach": {"topic": "Variables and data types in Python"}
+        },
+        {
+          "id": "numbers", "title": "Numbers and math operations",
+          "search": "python arithmetic operators integer division modulo float rounding",
+          "links": [{"title": "Using Python as a calculator", "url": "https://docs.python.org/3/tutorial/introduction.html#using-python-as-a-calculator"}],
+          "theory": "<p>Operators: <code>+ - * /</code>, plus <code>//</code> (floor division), <code>%</code> (remainder) and <code>**</code> (power).</p><p><code>/</code> always gives a float: <code>7 / 2</code> is <code>3.5</code>. <code>7 // 2</code> is <code>3</code> and <code>7 % 2</code> is <code>1</code>.</p><p>Floats are approximate (<code>0.1 + 0.2</code> is not exactly <code>0.3</code>), so use <code>round(x, 2)</code> when showing money or kWh.</p>",
+          "example": "units_kwh = 350\nrate_per_kwh = 68.5\nbill = units_kwh * rate_per_kwh\nprint(\"Bill:\", round(bill, 2))\n\nprint(7 / 2, 7 // 2, 7 % 2)\nprint(0.1 + 0.2)",
+          "practice": {"prompt": "A household used 420 kWh at 55.25 per kWh, plus a fixed charge of 1500. Compute and print the total, rounded to 2 decimals.", "starter": "# your code here\n"},
+          "workshop": {"title": "Bill Splitter", "brief": "Three flatmates share one meter. Given the total bill and each person's number of days at home, split the bill fairly and print each share.", "starter": "total_bill = 24000\ndays_home = [30, 20, 10]\n\n# compute each share\n"},
+          "teach": {"topic": "Numbers and math operations in Python"}
+        },
+        {
+          "id": "conditionals", "title": "Booleans and conditionals",
+          "search": "python if elif else boolean comparison operators beginners",
+          "links": [{"title": "if Statements", "url": "https://docs.python.org/3/tutorial/controlflow.html#if-statements"}],
+          "theory": "<p>Comparisons (<code>== != &lt; &gt; &lt;= &gt;=</code>) produce booleans. Combine them with <code>and</code>, <code>or</code>, <code>not</code>.</p><p><code>if / elif / else</code> picks one path. Python uses <b>indentation</b> to know what belongs inside.</p><p>Be careful: <code>=</code> assigns, <code>==</code> compares.</p>",
+          "example": "voltage = 198\n\nif voltage < 180:\n    status = \"CRITICAL: undervoltage\"\nelif voltage < 207:\n    status = \"WARNING: low\"\nelif voltage <= 253:\n    status = \"normal\"\nelse:\n    status = \"WARNING: overvoltage\"\n\nprint(voltage, status)",
+          "practice": {"prompt": "Given a transformer load percentage, print 'overloaded' above 100, 'high' from 80 to 100, and 'ok' otherwise.", "starter": "load_percent = 92\n# your code here\n"},
+          "workshop": {"title": "Outage Priority Checker", "brief": "Given the number of customers affected and whether a hospital is on the feeder, print a priority: 'URGENT', 'HIGH' or 'NORMAL'.", "starter": "customers_affected = 1200\nhospital_on_feeder = False\n\n# decide priority\n"},
+          "teach": {"topic": "Booleans and if/elif/else in Python"}
+        }
+      ]
+    },
+    {
+      "id": "functions-loops", "title": "Functions and Loops",
+      "lessons": [
+        {
+          "id": "functions", "title": "Functions and scope",
+          "search": "python functions parameters return scope local global beginners",
+          "links": [{"title": "Defining Functions", "url": "https://docs.python.org/3/tutorial/controlflow.html#defining-functions"}, {"title": "Scopes and namespaces", "url": "https://docs.python.org/3/tutorial/classes.html#python-scopes-and-namespaces"}],
+          "theory": "<p>A <b>function</b> packages steps you reuse. <code>def name(parameters):</code> defines it, <code>return</code> hands a value back.</p><p><b>Scope:</b> variables created inside a function are <i>local</i>. They vanish when the function ends and can't be seen outside.</p><p>A function without <code>return</code> gives back <code>None</code>. Printing is not the same as returning.</p>",
+          "example": "def energy_cost(kwh, rate=68.5):\n    cost = kwh * rate\n    return round(cost, 2)\n\nprint(energy_cost(350))\nprint(energy_cost(350, rate=50))\n# print(cost)  # NameError: cost only exists inside the function",
+          "practice": {"prompt": "Write a function `apply_discount(price, percent)` that returns the price after the discount. Test it with two calls.", "starter": "def apply_discount(price, percent):\n    pass\n\nprint(apply_discount(1000, 10))\n"},
+          "workshop": {"title": "Substation Store-room", "brief": "Write functions `add_item(inventory, name, qty)` and `low_stock(inventory, limit)` for a store-room of spare fuses and cables. Return, don't print.", "starter": "inventory = {}\n\n# write your functions\n"},
+          "teach": {"topic": "Functions and scope in Python"}
+        },
+        {
+          "id": "loops-lists", "title": "Loops and lists",
+          "search": "python for loop while loop lists append enumerate beginners",
+          "links": [{"title": "for Statements", "url": "https://docs.python.org/3/tutorial/controlflow.html#for-statements"}, {"title": "More on Lists", "url": "https://docs.python.org/3/tutorial/datastructures.html#more-on-lists"}],
+          "theory": "<p>A <b>list</b> holds many values in order: <code>[12.5, 14.0, 13.2]</code>. Index from 0: <code>readings[0]</code>.</p><p><code>for item in list:</code> repeats code once per item. <code>while condition:</code> repeats until the condition turns false (watch for infinite loops).</p><p>Handy: <code>len()</code>, <code>sum()</code>, <code>.append()</code>, <code>enumerate()</code>.</p>",
+          "example": "readings = [12.5, 14.0, 13.2, 0.0, 15.1]\n\ntotal = 0\nfor r in readings:\n    total += r\n\nprint(\"Total:\", total)\nprint(\"Average:\", total / len(readings))\n\nfor i, r in enumerate(readings):\n    if r == 0:\n        print(\"Zero reading at position\", i)",
+          "practice": {"prompt": "Given hourly load readings, print the highest one and the hour (index) it happened, without using max().", "starter": "load = [310, 295, 340, 410, 388, 402]\n# your code here\n"},
+          "workshop": {"title": "Daily Load Report", "brief": "From a list of 24 hourly readings, print the average, the peak hour, and how many hours were above 90% of the peak.", "starter": "load = [220, 210, 205, 200, 215, 260, 320, 410, 450, 430, 400, 390,\n        385, 380, 395, 420, 470, 520, 540, 500, 440, 380, 300, 250]\n\n# build the report\n"},
+          "teach": {"topic": "Loops and lists in Python"}
+        }
+      ]
+    },
+    {
+      "id": "real-data", "title": "Working with Real Data",
+      "lessons": [
+        {
+          "id": "dicts", "title": "Dictionaries",
+          "search": "python dictionaries keys values items get loop beginners",
+          "links": [{"title": "Dictionaries", "url": "https://docs.python.org/3/tutorial/datastructures.html#dictionaries"}],
+          "theory": "<p>A <b>dictionary</b> maps keys to values, like a lookup table: <code>{\"MTR-1\": 12.5}</code>.</p><p>Read with <code>d[key]</code> (error if missing) or <code>d.get(key, default)</code> (safe). Loop with <code>for k, v in d.items():</code>.</p><p>Records are often a dict per row: a meter with id, reading and status.</p>",
+          "example": "readings = {\"MTR-1\": 12.5, \"MTR-2\": 14.0, \"MTR-3\": 0.0}\n\nreadings[\"MTR-4\"] = 9.8\nprint(readings.get(\"MTR-9\", \"unknown meter\"))\n\nfor meter, kwh in readings.items():\n    print(meter, kwh)",
+          "practice": {"prompt": "Given a dict of meter id to kWh, print only the meters above 13 kWh.", "starter": "readings = {\"MTR-1\": 12.5, \"MTR-2\": 14.0, \"MTR-3\": 13.2}\n# your code here\n"},
+          "workshop": {"title": "Meter Lookup Tool", "brief": "Store several meters as dicts (id, customer, reading). Write a function that finds a meter by id and returns a friendly message if it doesn't exist.", "starter": "meters = [\n    {\"id\": \"MTR-1\", \"customer\": \"Ada\", \"reading\": 12.5},\n]\n\n# write find_meter(meters, meter_id)\n"},
+          "teach": {"topic": "Dictionaries in Python"}
+        },
+        {
+          "id": "errors", "title": "Error handling",
+          "search": "python try except ValueError ZeroDivisionError beginners",
+          "links": [{"title": "Errors and Exceptions", "url": "https://docs.python.org/3/tutorial/errors.html"}],
+          "theory": "<p>Real data is messy: empty lists, text where numbers should be, missing values. An uncaught error stops your program.</p><p><code>try:</code> run risky code, <code>except SomeError:</code> handle it. Catch <i>specific</i> errors (<code>ValueError</code>, <code>ZeroDivisionError</code>), not everything.</p><p>You can also raise your own: <code>raise ValueError(\"negative kWh\")</code>.</p>",
+          "example": "def average(readings):\n    try:\n        return sum(readings) / len(readings)\n    except ZeroDivisionError:\n        return None\n\nprint(average([10, 12, 14]))\nprint(average([]))\n\nraw = [\"12.5\", \"oops\", \"13.0\"]\nfor item in raw:\n    try:\n        print(float(item))\n    except ValueError:\n        print(\"bad value:\", item)",
+          "practice": {"prompt": "Turn the list of strings into floats, skipping any that can't be converted, and print the clean list.", "starter": "raw = [\"12.5\", \"\", \"13.0\", \"N/A\", \"14.2\"]\n# your code here\n"},
+          "workshop": {"title": "Meter Data Cleaner", "brief": "Given raw meter strings, produce a clean list of floats, reject negatives with a clear message, and report how many were bad.", "starter": "raw = [\"12.5\", \"-3\", \"abc\", \"14.0\", \"\", \"13.7\"]\n\n# clean it\n"},
+          "teach": {"topic": "Error handling with try/except in Python"}
+        }
+      ]
+    }
+  ]
+}

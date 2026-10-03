@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { classroomTurn } from "./classroom.js";
 import { MODEL, STUDENTS } from "./students.js";
 import { loadSession, saveTurn } from "./store.js";
+import { ddgSearch } from "./search.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const VOICES: Record<string, string | undefined> = {
@@ -24,6 +25,15 @@ createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/config") {
       return send(res, 200, { model: MODEL, students: STUDENTS, elevenlabs: !!process.env.ELEVENLABS_API_KEY });
+    }
+    if (req.method === "GET" && url.pathname === "/api/curriculum") {
+      res.writeHead(200, { "content-type": "application/json" }); return res.end(await readFile("curriculum/python.json"));
+    }
+    if (req.method === "GET" && url.pathname === "/api/search") {
+      const q = (url.searchParams.get("q") ?? "").trim().slice(0, 200);
+      if (!q) return send(res, 400, { error: "q required" });
+      try { return send(res, 200, { hits: await ddgSearch(q) }); }
+      catch (e) { return send(res, 502, { error: "Search unavailable: " + (e as Error).message }); }
     }
     if (req.method === "POST" && url.pathname === "/api/turn") {
       const { sessionId, topic, code, utterance } = await body(req);
@@ -52,4 +62,4 @@ createServer(async (req, res) => {
   } catch (e) {
     console.error(e); send(res, 500, { error: String((e as Error).message ?? e) });
   }
-}).listen(PORT, () => console.log(`Reverse Classroom on http://localhost:${PORT} (model: ${MODEL})`));
+}).listen(PORT, () => console.log(`TeachBack on http://localhost:${PORT} (model: ${MODEL})`));

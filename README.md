@@ -1,9 +1,9 @@
-# 🎓 Reverse Classroom
+# 🎓 TeachBack
 
 **Theory → Practice → Workshop → _Teach_.**
-Built for a friend who works 9–5 at an electricity distribution company, wants to learn Python, and is too tired to type after work.
+A learn-and-teach platform built for a friend who works 9–5 at an electricity distribution company, wants to learn Python, and is too tired to type after work.
 
-Instead of another tutorial, he *teaches* three AI students out loud while sharing his code:
+Each lesson has four phases: 📖 **Theory** (short, grid-themed explanation plus curated and DuckDuckGo-searched resources), ✏️ **Practice** and 🛠️ **Workshop** (run Python right in the browser via Pyodide), then 🎓 **Teach**. Instead of another tutorial, he *teaches* three AI students out loud while sharing his code:
 
 | Student | Asks | 
 |---|---|
@@ -23,7 +23,7 @@ Each student also scores how well your explanation landed (0–10). If you can't
 ollama pull gemma2:9b        # or any model; set LLM_MODEL
 npm install
 npm start                    # http://localhost:3000
-npm test                     # smoke test with a fake LLM, no Ollama needed
+npm test                     # smoke + search-parser tests, no Ollama needed
 ```
 Use Chrome/Edge/Safari for the hold-to-talk mic. Click "Teach →" or release the mic button to send.
 
@@ -34,10 +34,19 @@ Use Chrome/Edge/Safari for the hold-to-talk mic. Click "Teach →" or release th
 | `MONGODB_URI` | Persist sessions in MongoDB Atlas (default: local `data/sessions.json`) |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_MAYA/KOFI/ZEE` | ElevenLabs voices (default: browser voices) |
 
+## Syllabus
+`curriculum/python.json`: 3 modules, 7 lessons (variables, numbers, conditionals, functions, loops/lists, dicts, error handling), all using electricity-distribution examples. Add a lesson by adding an object; no code changes needed. Progress is stored in the browser. A lesson's Teach step completes automatically when all three students score 7+/10.
+
+## Notes
+- **Web search** uses DuckDuckGo's HTML endpoint (no API key). It's scraping, so it can break or be rate-limited; curated links always show too.
+- **Python runner** loads Pyodide from a CDN on first Run (needs internet once).
+
 ## Layout
 - `src/students.ts`: the three Mastra agents and personalities
 - `src/classroom.ts`: parallel fan-out of one teaching turn
 - `src/store.ts`: session memory (Mongo or file)
+- `src/search.ts`: DuckDuckGo search
+- `curriculum/python.json`: the syllabus
 - `src/server.ts`, `public/index.html`: server and voice-first UI
 
 ## Status / TODO

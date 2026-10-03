@@ -1,13 +1,13 @@
 {
-  "name": "reverse-classroom",
+  "name": "teachback",
   "version": "0.1.0",
   "private": true,
-  "description": "Theory -> Practice -> Workshop -> Teach. Three open-model AI students that quiz you until you really understand.",
+  "description": "TeachBack: learn Python, then teach it back to three open-model AI students until you really understand it.",
   "type": "module",
   "scripts": {
     "start": "tsx src/server.ts",
     "check": "tsc --noEmit",
-    "test": "tsx src/smoke.ts"
+    "test": "tsx src/smoke.ts && tsx src/search.test.ts"
   },
   "license": "MIT",
   "dependencies": {
