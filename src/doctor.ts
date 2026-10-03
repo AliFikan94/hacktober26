@@ -2,15 +2,21 @@
 import { readFile } from "node:fs/promises";
 import { classroomTurn, examineTurn, generateJson, tryParseReply, studentPrompt, type RubricPoint } from "./classroom.js";
 import { MODEL, agents, STUDENTS, type StudentId } from "./students.js";
-import { OLLAMA, installedModels, autoSelect, isCloudName, names, friendlyModelError, freeBytes } from "./models.js";
+import { OLLAMA, listInstalled, autoSelect, isCloudName, names, friendlyModelError, freeBytes } from "./models.js";
 
 const ok = (s: string) => console.log("  ✓ " + s), bad = (s: string) => console.log("  ✗ " + s), warn = (s: string) => console.log("  ! " + s);
 const short = (e: unknown) => friendlyModelError(String((e as Error)?.message ?? e));
 
 console.log("\nTeachBack doctor\n");
 console.log("1. Is the model server reachable, and which model will be used?");
-const list = await installedModels();
-if (!list) { bad(`Can't reach Ollama at ${OLLAMA}. Open the Ollama app and try again.`); process.exit(1); }
+let tags = await listInstalled();
+for (let i = 1; i <= 3 && !tags.list && tags.reason !== "refused"; i++) { console.log(`  … Ollama is slow to answer (try ${i}/3). It may still be busy or short on memory, waiting…`); tags = await listInstalled(15000); }
+const list = tags.list;
+if (!list) {
+  bad(tags.reason === "refused" ? `Ollama isn't running at ${OLLAMA}. Open the Ollama app (look for the llama icon in the system tray), wait a few seconds, and run this again.`
+    : `Ollama is running but isn't answering (${tags.reason}). It's probably busy or low on memory. Close other apps, wait a minute, and run this again.`);
+  process.exit(1);
+}
 ok(`Ollama is running. Installed: ${names(list).join(", ") || "(none)"}. Free memory: ${(freeBytes() / 2 ** 30).toFixed(1)} GiB`);
 const old = MODEL, sel = autoSelect(list);
 if (sel.switchedTo) ok(`"${old}" ${sel.reason === "memory" ? "is too big for your free memory" : "isn't installed"}, so using "${sel.switchedTo}" (the app does the same automatically).`);

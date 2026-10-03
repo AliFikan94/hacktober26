@@ -13,12 +13,18 @@ export const fits = (m: Installed, free = freeBytes()) => isCloudName(m.name) ||
 export const names = (l: Installed[]) => l.map((m) => m.name);
 export const findModel = (l: Installed[], n: string) => l.find((m) => m.name === n || m.name === n + ":latest");
 
-export async function installedModels(): Promise<Installed[] | null> {
+export type TagsResult = { list: Installed[] | null; reason?: "refused" | "timeout" | "other" };
+/** Ask Ollama what is installed. Distinguishes "not running" from "too slow to answer" (common on low-memory PCs). */
+export async function listInstalled(timeoutMs = 8000): Promise<TagsResult> {
   try {
-    const d = (await (await fetch(OLLAMA + "/api/tags", { signal: AbortSignal.timeout(3000) })).json()) as { models?: { name: string; size?: number }[] };
-    return (d.models ?? []).map((m) => ({ name: m.name, size: m.size ?? 0 }));
-  } catch { return null; }
+    const d = (await (await fetch(OLLAMA + "/api/tags", { signal: AbortSignal.timeout(timeoutMs) })).json()) as { models?: { name: string; size?: number }[] };
+    return { list: (d.models ?? []).map((m) => ({ name: m.name, size: m.size ?? 0 })) };
+  } catch (e) {
+    const err = e as { name?: string; cause?: { code?: string } };
+    return { list: null, reason: err.name === "TimeoutError" ? "timeout" : err.cause?.code === "ECONNREFUSED" ? "refused" : "other" };
+  }
 }
+export async function installedModels(timeoutMs = 8000): Promise<Installed[] | null> { return (await listInstalled(timeoutMs)).list; }
 
 /** Prefer the biggest local Gemma that fits in memory, then any local model that fits, then a cloud model. */
 export function pickModel(list: Installed[], free = freeBytes()): string | undefined {
