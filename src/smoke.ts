@@ -1,4 +1,4 @@
-// Smoke test: fake OpenAI-compatible LLM -> full classroom turn through Mastra agents.
+// Tests with a fake OpenAI-compatible LLM (no Ollama needed).
 import { createServer } from "node:http";
 const fake = createServer(async (req, res) => {
   let b = ""; for await (const c of req) b += c;
@@ -12,8 +12,26 @@ const fake = createServer(async (req, res) => {
 }).listen(0);
 await new Promise((r) => fake.once("listening", r));
 process.env.LLM_BASE_URL = `http://localhost:${(fake.address() as any).port}/v1`;
-const { classroomTurn } = await import("./classroom.js");
+const { classroomTurn, verifyCoverage, tryParseReply } = await import("./classroom.js");
+const fail = (m: string) => { console.error("FAIL: " + m); process.exit(1); };
+
 const replies = await classroomTurn({ topic: "t", code: "print(1)", history: [], utterance: "it prints one" });
-console.log(replies);
-if (replies.length !== 3 || replies.some((r) => !r.question.startsWith("question from"))) process.exit(1);
-console.log("OK"); fake.close(); process.exit(0);
+if (replies.length !== 3 || replies.some((r) => !r.question.startsWith("question from"))) fail("classroomTurn");
+console.log("classroomTurn OK");
+
+const rubric = [{ id: "a", label: "A", point: "pa" }, { id: "b", label: "B", point: "pb" }, { id: "c", label: "C", point: "pc" }];
+const said = "A variable is basically a name that I stick on a value.\nValues have types like int and float.";
+const raw = (pts: unknown[]) => "Sure! " + JSON.stringify({ points: pts });
+const cases: [string, string, string[]][] = [
+  ["valid quote", raw([{ id: "a", covered: true, quote: "a name that I stick on a value" }]), ["a"]],
+  ["case/punctuation tolerant", raw([{ id: "b", covered: true, quote: "VALUES have types, like int and float!" }]), ["b"]],
+  ["hallucinated quote rejected", raw([{ id: "a", covered: true, quote: "a variable is a box in memory" }]), []],
+  ["too-short quote rejected", raw([{ id: "a", covered: true, quote: "a name" }]), []],
+  ["covered=false ignored", raw([{ id: "a", covered: false, quote: "a name that I stick on a value" }]), []],
+  ["unknown id ignored", raw([{ id: "zzz", covered: true, quote: "a name that I stick on a value" }]), []],
+  ["garbage -> nothing", "I think they did great!", []],
+];
+for (const [name, r, want] of cases) { const got = verifyCoverage(r, rubric, said); if (JSON.stringify(got) !== JSON.stringify(want)) fail(`${name}: got ${JSON.stringify(got)}`); }
+console.log(`verifyCoverage OK (${cases.length} cases)`);
+if (tryParseReply("no json here") !== null || !tryParseReply('x {"question":"why?","understanding":4} y')) fail("tryParseReply");
+console.log("tryParseReply OK"); fake.close(); process.exit(0);

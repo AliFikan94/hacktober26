@@ -29,7 +29,7 @@ store.set("tb-session", baseSession);
 const isDone = (lid, p) => !!progress[lid]?.[p];
 function markDone(lid, p) {
   const was = !!progress[lid]?.[p]; (progress[lid] ??= {})[p] = true; store.set("tb-progress", progress);
-  touchDay(); updateRing(); renderSide(); if (!was) checkMilestones(lid, p);
+  touchDay(); updateRing(); if (!was) checkMilestones(lid, p);
 }
 const stepsDone = () => lessons.reduce((n, l) => n + PHASES.filter((p) => isDone(l.id, p)).length, 0);
 function nextTarget() { for (const l of lessons) for (const p of PHASES) if (!isDone(l.id, p)) return { l, p }; return null; }
@@ -56,8 +56,14 @@ async function openPop() {
   const d = await fetch("/api/models").then((r) => r.json()).catch(() => ({ installed: [], unreachable: true }));
   const rows = d.installed.map((m) => `<button class="opt ${m.name === cfg.model ? "on" : ""}" data-m="${esc(m.name)}" role="menuitemradio">
       <span><div class="name">${esc(m.name)}</div><div class="sub">${m.cloud ? "Runs on Ollama's servers" : "Runs on this device"}</div></span>${svg('<path d="M5 12l5 5 9-10"/>', 'class="check"')}</button>`).join("");
+  const cloud = isCloud(cfg.model), priv = `<div class="priv"><h4>What stays on this device</h4>
+    <div class="row2"><b>AI students</b><span>${cloud ? "Runs on Ollama's servers" : cfg.hosted ? "Runs on the host's server" : "Local model"}</span><i class="${cloud || cfg.hosted ? "warn" : "good"}">${cloud || cfg.hosted ? "off device" : "private"}</i></div>
+    <div class="row2"><b>Your voice</b><span>Browser speech recognition. In Chrome and Edge the audio goes to Google or Microsoft. Type to keep it local.</span><i class="warn">cloud</i></div>
+    <div class="row2"><b>Your code</b><span>Python runs inside your browser.</span><i class="good">private</i></div>
+    <div class="row2"><b>Progress</b><span>Saved only in this browser.</span><i class="good">private</i></div></div>`;
+  if (cfg.hosted) { pop.innerHTML = `<h4>AI model</h4><p><b>${esc(cfg.model)}</b> is set by the host of this site.</p>${priv}`; return; }
   pop.innerHTML = `<h4>AI model</h4>${rows || `<p>${d.unreachable ? "Can't reach Ollama. Open the Ollama app, then try again." : "No models installed yet. In a terminal run <code>ollama pull gemma3:4b</code>."}</p>`}
-    ${d.installed.some((m) => /gemma/i.test(m.name)) ? "" : `<p>Tip: a local Gemma model keeps everything on this device.</p>`}`;
+    ${d.installed.some((m) => /gemma/i.test(m.name)) ? "" : `<p>Tip: a local Gemma model keeps the students on this device.</p>`}${priv}`;
   pop.querySelectorAll(".opt").forEach((b) => (b.onclick = async () => {
     await fetch("/api/model", { method: "POST", body: JSON.stringify({ model: b.dataset.m }) });
     store.set("tb-model", b.dataset.m); pop.classList.add("hidden"); await loadConfig(); startPoll();
@@ -74,14 +80,13 @@ async function init() {
   const saved = store.get("tb-model", null);
   if (saved && saved !== cfg.model) { await fetch("/api/model", { method: "POST", body: JSON.stringify({ model: saved }) }); await loadConfig(); }
   lessons = course.modules.flatMap((m) => m.lessons);
-  updatePill(); updateRing(); initSide(); if (!cfg.ready) startPoll();
+  updatePill(); updateRing(); if (!cfg.ready) startPoll();
   addEventListener("hashchange", route); route();
 }
 function route() {
   cleanup(); cleanup = () => {};
   const [, area, id, ph] = location.hash.split("/");
   const l = area === "lesson" && lessons.find((x) => x.id === id);
-  closeDrawer(); renderSide();
   if (area === "certificate") { renderedLesson = null; certificatePage(); }
   else if (l) lessonPage(l, PHASES.includes(ph) ? ph : (PHASES.find((p) => !isDone(l.id, p)) ?? "theory"));
   else { renderedLesson = null; homePage(); }
@@ -101,11 +106,13 @@ function homePage() {
       <button class="btn" id="cont">${started ? "Continue" : "Begin"}</button></div>`
       : `<div class="continue"><div><small>All done</small><strong>You finished the whole course.</strong></div></div>`}
     <div class="overall"><div class="track"><i style="width:${(done / total) * 100}%"></i></div><span>${done} of ${total} steps</span></div>
+    <div class="chips"><span class="chip ${streak() ? "hot" : ""}">${streak() ? streak() + "-day streak" : "Start a streak today"}</span><span class="chip">${store.get("tb-stats", { turns: 0 }).turns} explanations given</span></div>
     ${course.modules.map((m) => `<h3 class="group-title">${esc(m.title)}</h3><div class="group">${m.lessons.map((l) => {
       const n = lessons.indexOf(l) + 1, all = PHASES.every((p) => isDone(l.id, p));
       return `<a class="item ${all ? "done" : ""}" href="#/lesson/${l.id}"><span class="num">${all ? "✓" : n}</span><span class="t">${esc(l.title)}</span>
         <span class="pips">${PHASES.map((p) => `<i class="${isDone(l.id, p) ? "on" : ""}"></i>`).join("")}</span>${ICON.chev}</a>`;
     }).join("")}</div>`).join("")}
+    <a class="cert-row ${courseComplete() ? "ready" : ""}" href="#/certificate">${svg('<circle cx="12" cy="9" r="6"/><path d="M8.5 14l-1.5 7 5-3 5 3-1.5-7"/>')}<div><b>Certificate</b><span>${courseComplete() ? "Ready. Claim yours" : `Unlocks when all ${total} steps are done`}</span></div></a>
   </div>`;
   if (t) $("cont").onclick = () => go(`#/lesson/${t.l.id}/${t.p}`);
   if ($("nameform")) $("nameform").onsubmit = (e) => { e.preventDefault(); const v = $("nm").value.trim(); if (v) { store.set("tb-name", v); homePage(); } };
@@ -276,7 +283,8 @@ function viewTeach(l, stage) {
     <section class="room">
       <div class="orbs">${ids.map((id) => `<div class="student" id="s-${id}" style="--c:var(--${id})"><div class="orbwrap"><svg viewBox="0 0 64 64"><circle class="t" cx="32" cy="32" r="29"/><circle class="p" cx="32" cy="32" r="29" stroke-dasharray="${C}" stroke-dashoffset="${C}"/></svg><div class="orb"></div></div>
         <div class="nm">${cfg.students[id].name}</div><div class="rl">${esc(cfg.students[id].role)}</div><div class="score"></div></div>`).join("")}</div>
-      <div class="feed" id="feed"><div class="empty" id="empty"><h2>Explain it like they're in the room.</h2><p>Tap the microphone and talk through the code. ${ids.map((i) => cfg.students[i].name).join(", ").replace(/, ([^,]*)$/, " and $1")} will ask questions.</p></div></div>
+      <div class="ideas" id="ideas"><small>Explain</small>${(l.rubric ?? []).map((r) => `<span class="idea" data-id="${r.id}">${esc(r.label)}</span>`).join("")}</div>
+      <div class="feed" id="feed"><div class="empty" id="empty"><h2>Explain it like they're in the room.</h2><p>Cover the ideas above in your own words. Each lights up when you've explained it correctly. ${ids.map((i) => cfg.students[i].name).join(", ").replace(/, ([^,]*)$/, " and $1")} will ask questions.</p></div></div>
       <div class="composer"><div class="cbox"><textarea id="say" rows="1" placeholder="Type, or tap the mic and talk"></textarea>
         <button class="round ghost" id="mute" aria-label="Toggle spoken replies" title="Spoken replies"></button>
         <button class="round" id="mic" aria-label="Speak" title="Speak">${ICON.mic}</button>
@@ -291,7 +299,13 @@ function viewTeach(l, stage) {
   const clearEmpty = () => $("empty")?.remove();
   const setMuteIcon = () => { $("mute").innerHTML = muted ? ICON.muted : ICON.speaker; };
   setMuteIcon(); resetHint();
-  const setScore = (id, u) => { const s = $("s-" + id); s.querySelector(".p").style.strokeDashoffset = C * (1 - u / 10); s.querySelector(".score").textContent = `${u}/10`; };
+  const setScore = (id, u) => { const s = $("s-" + id); s.querySelector(".p").style.strokeDashoffset = C * (1 - u / 10);  };
+  const rubric = l.rubric ?? []; let covered = [];
+  const setCovered = (ids, animate) => {
+    for (const id of ids) { const el = document.querySelector(`.idea[data-id="${id}"]`); if (el && !el.classList.contains("on")) { el.classList.add("on"); if (animate) { el.classList.remove("pulse"); void el.offsetWidth; el.classList.add("pulse"); } } }
+    covered = [...new Set([...covered, ...ids])];
+  };
+  const allCovered = () => rubric.length > 0 && rubric.every((r) => covered.includes(r.id));
   const setThinking = (id, on) => $("s-" + id)?.classList.toggle("thinking", on);
 
   const addYou = (text) => { clearEmpty(); const d = document.createElement("div"); d.className = "msg you"; d.textContent = text; feed.appendChild(d); scrollDown(); };
@@ -303,7 +317,7 @@ function viewTeach(l, stage) {
   const fill = (el, text, cls = "") => { el.className = "msg st " + cls; el.querySelector(".bub").textContent = text; };
   const addWin = () => {
     const i = lessons.indexOf(l), nx = lessons[i + 1], d = document.createElement("div"); d.className = "win";
-    d.innerHTML = `<h3>Lesson complete</h3><p>All three students understood you.</p><button class="btn" id="nextl">${nx ? "Next: " + esc(nx.title) : "Back to the course"}</button>`;
+    d.innerHTML = `<h3>Lesson complete</h3><p>You explained every key idea in your own words.</p><button class="btn" id="nextl">${nx ? "Next: " + esc(nx.title) : "Back to the course"}</button>`;
     feed.appendChild(d); scrollDown(); d.querySelector("button").onclick = () => go(nx ? `#/lesson/${nx.id}/theory` : "#/");
   };
 
@@ -313,27 +327,37 @@ function viewTeach(l, stage) {
     clearEmpty();
     for (const t of s.history) t.who === "teacher" ? addYou(t.text) : addStudent(t.who, t.text);
     for (const [id, arr] of Object.entries(s.understanding)) setScore(id, arr[arr.length - 1]);
+    setCovered(s.covered ?? [], false); turnsHere = s.history.filter((t) => t.who === "teacher").length; maybeAssist();
     feed.style.scrollBehavior = "auto"; scrollDown(); feed.style.scrollBehavior = "";
   }).catch(() => {});
 
   const autosize = () => { say.style.height = "auto"; say.style.height = Math.min(say.scrollHeight, 120) + "px"; $("send").disabled = busy || !say.value.trim(); };
-  let busy = false;
+  let busy = false, turnsHere = 0, winShown = false;
+  function maybeAssist() {
+    if (turnsHere < 8 || allCovered() || isDone(lid, "teach") || $("assist")) return;
+    const d = document.createElement("div"); d.className = "assist"; d.id = "assist";
+    d.innerHTML = `<button class="link">Taking long? Finish this lesson anyway</button>`; feed.appendChild(d); scrollDown();
+    d.querySelector("button").onclick = () => { const a = store.get("tb-assisted", {}); a[lid] = true; store.set("tb-assisted", a); winShown = true; markDone(lid, "teach"); $("seg")?.querySelector('[data-p="teach"]')?.classList.add("done"); d.remove(); addWin(); };
+  }
   async function send() {
     const text = say.value.trim(); if (busy || !text) return;
-    busy = true; { const st = store.get("tb-stats", { turns: 0 }); st.turns++; store.set("tb-stats", st); renderSide(); } stopSpeaking(); addYou(text); say.value = ""; autosize(); hint("The students are thinking…");
+    busy = true; { const st = store.get("tb-stats", { turns: 0 }); st.turns++; store.set("tb-stats", st); } stopSpeaking(); addYou(text); say.value = ""; autosize(); hint("The students are thinking…");
     const waits = {}, latest = {}; let failed = false;
     for (const id of ids) { waits[id] = addStudent(id, null, "wait"); setThinking(id, true); }
     try {
-      const r = await fetch("/api/turn", { method: "POST", body: JSON.stringify({ sessionId: sid, topic: l.teach.topic, code: ed.get(), utterance: text }) });
+      const r = await fetch("/api/turn", { method: "POST", body: JSON.stringify({ sessionId: sid, lessonId: lid, topic: l.teach.topic, code: ed.get(), utterance: text }) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Server error " + r.status);
       for await (const line of readLines(r.body)) {
         if (!ctx.alive) return;
         const ev = JSON.parse(line);
         if (ev.type === "reply") { fill(waits[ev.id], ev.question); setThinking(ev.id, false); setScore(ev.id, ev.understanding); latest[ev.id] = ev.understanding; speak(ev.id, ev.question); scrollDown(); }
         else if (ev.type === "error") { failed = true; fill(waits[ev.id], "Couldn't think of a question this time.", "fail"); setThinking(ev.id, false); }
+        else if (ev.type === "coverage") { const fresh = ev.covered.filter((x) => !covered.includes(x)); setCovered(ev.covered, true); if (fresh.length) hint(`${fresh.length === 1 ? "Nice, one more idea covered" : fresh.length + " more ideas covered"}`); }
         else if (ev.type === "fatal") throw new Error(ev.message);
       }
-      if (!failed && ids.every((id) => (latest[id] ?? 0) >= 7)) { if (!isDone(lid, "teach")) { markDone(lid, "teach"); $("seg")?.querySelector('[data-p="teach"]')?.classList.add("done"); } addWin(); }
+      turnsHere++;
+      if (allCovered() && !winShown) { winShown = true; if (!isDone(lid, "teach")) { markDone(lid, "teach"); $("seg")?.querySelector('[data-p="teach"]')?.classList.add("done"); } addWin(); }
+      else maybeAssist();
     } catch (e) {
       if (!ctx.alive) return;
       for (const id of ids) { waits[id].remove(); setThinking(id, false); }
@@ -382,30 +406,6 @@ function streak() {
 const lessonComplete = (l) => PHASES.every((p) => isDone(l.id, p));
 const courseComplete = () => lessons.every(lessonComplete);
 
-/* ================= sidebar ================= */
-const mq = matchMedia("(max-width: 900px)");
-function initSide() {
-  if (store.get("tb-side-collapsed", false) && !mq.matches) $("shell").classList.add("collapsed");
-  $("sidebtn").onclick = () => {
-    if (mq.matches) { const o = $("side").classList.toggle("open"); document.body.classList.toggle("drawer", o); }
-    else { const c = $("shell").classList.toggle("collapsed"); store.set("tb-side-collapsed", c); }
-  };
-  $("scrim").onclick = closeDrawer;
-  renderSide();
-}
-function closeDrawer() { $("side")?.classList.remove("open"); document.body.classList.remove("drawer"); }
-function renderSide() {
-  if (!course) return;
-  const done = stepsDone(), total = lessons.length * 4, C = 2 * Math.PI * 22, cur = location.hash.split("/")[2], st = store.get("tb-stats", { turns: 0 }), sk = streak();
-  const ready = courseComplete();
-  $("side").innerHTML = `<div class="side-top"><svg class="ring-lg" viewBox="0 0 52 52"><circle class="t" cx="26" cy="26" r="22"/><circle class="p" cx="26" cy="26" r="22" transform="rotate(-90 26 26)" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - done / total)}"/></svg>
-      <div><b>${done} of ${total} steps</b><span>${Math.round((done / total) * 100)}% of ${esc(course.title)}</span></div></div>
-    <div class="chips"><span class="chip ${sk ? "hot" : ""}">${sk ? sk + (sk === 1 ? "-day streak" : "-day streak") : "Start a streak today"}</span><span class="chip">${st.turns} ${st.turns === 1 ? "explanation" : "explanations"}</span></div>
-    ${course.modules.map((m) => `<h4>${esc(m.title)}<em>${m.lessons.filter(lessonComplete).length}/${m.lessons.length}</em></h4>` + m.lessons.map((l) =>
-      `<a class="sl ${l.id === cur ? "active" : ""} ${lessonComplete(l) ? "full" : ""}" href="#/lesson/${l.id}"><span class="n">${lessonComplete(l) ? "✓" : lessons.indexOf(l) + 1}</span><span class="tt">${esc(l.title)}</span><span class="pips">${PHASES.map((p) => `<i class="${isDone(l.id, p) ? "on" : ""}"></i>`).join("")}</span></a>`).join("")).join("")}
-    <a class="cert-row ${ready ? "ready" : ""}" href="#/certificate">${svg('<circle cx="12" cy="9" r="6"/><path d="M8.5 14l-1.5 7 5-3 5 3-1.5-7"/>')}<div><b>Certificate</b><span>${ready ? "Ready. Claim yours" : `Unlocks at ${total} steps`}</span></div></a>`;
-}
-
 /* ================= share cards (SVG -> PNG) ================= */
 let svgSeq = 0;
 const ORBS = (id, cx, cy, r) => ["maya", "kofi", "zee"].map((k, i) => {
@@ -441,7 +441,7 @@ function certSVG(name, iso) {
     <line x1="300" y1="508" x2="900" y2="508" stroke="#1d1d1f" stroke-opacity=".3"/>
     <text x="600" y="565" text-anchor="middle" font-family="${SERIF}" font-size="26" fill="#1d1d1f">completed <tspan font-weight="700">${esc(course.title)}</tspan></text>
     <text x="600" y="606" text-anchor="middle" font-family="${SERIF}" font-size="22" fill="#6e6e73">${lessons.length} lessons, each taught back out loud to three AI students</text>
-    <text x="600" y="640" text-anchor="middle" font-family="${SERIF}" font-size="22" fill="#6e6e73">${st.turns} explanations given · Theory, Practice, Workshop and Teach complete</text>
+    <text x="600" y="640" text-anchor="middle" font-family="${SERIF}" font-size="22" fill="#6e6e73">${st.turns} explanations given · ${lessons.length - Object.keys(store.get("tb-assisted", {})).length} of ${lessons.length} lessons verified by an examiner</text>
     <text x="150" y="738" font-family="${SANS}" font-size="16" fill="#6e6e73" letter-spacing="1">DATE</text><text x="150" y="766" font-family="${SERIF}" font-size="24" fill="#1d1d1f">${esc(fmtDate(iso))}</text>
     <text x="1050" y="738" text-anchor="end" font-family="${SANS}" font-size="16" fill="#6e6e73" letter-spacing="1">CERTIFICATE ID</text><text x="1050" y="766" text-anchor="end" font-family="${SANS}" font-size="22" font-weight="600" fill="#1d1d1f" letter-spacing="1">${certId(nm, iso)}</text>
     <text x="600" y="790" text-anchor="middle" font-family="${SANS}" font-size="13" fill="#a1a1a6">Self-paced learning certificate issued by TeachBack. Not an accredited qualification.</text></svg>`;

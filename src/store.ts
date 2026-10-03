@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { MongoClient, type Collection } from "mongodb";
 import type { Reply, Turn } from "./classroom.js";
 
-export type Session = { _id: string; topic: string; code: string; history: Turn[]; understanding: Record<string, number[]>; updatedAt: string };
+export type Session = { _id: string; topic: string; code: string; history: Turn[]; understanding: Record<string, number[]>; covered: string[]; updatedAt: string };
 
 // MongoDB Atlas when MONGODB_URI is set, otherwise a local JSON file (keeps the offline story intact).
 let col: Collection<Session> | null = null;
@@ -22,8 +22,10 @@ export async function loadSession(id: string): Promise<Session | null> {
   return (await readAll())[id] ?? null;
 }
 
-export async function saveTurn(id: string, topic: string, code: string, utterance: string, replies: Reply[]) {
-  const s: Session = (await loadSession(id)) ?? { _id: id, topic, code, history: [], understanding: {}, updatedAt: "" };
+export async function saveTurn(id: string, topic: string, code: string, utterance: string, replies: Reply[], covered: string[] = []) {
+  const s: Session = (await loadSession(id)) ?? { _id: id, topic, code, history: [], understanding: {}, covered: [], updatedAt: "" };
+  s.covered ??= [];
+  s.covered = [...new Set([...s.covered, ...covered])];
   s.topic = topic; s.code = code; s.updatedAt = new Date().toISOString();
   s.history.push({ who: "teacher", text: utterance });
   for (const r of replies) {

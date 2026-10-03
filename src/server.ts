@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
-import { classroomTurn } from "./classroom.js";
+import { classroomTurn, examineTurn, type RubricPoint } from "./classroom.js";
 import { MODEL, STUDENTS, agents, setModel } from "./students.js";
 import { loadSession, saveTurn } from "./store.js";
 import { ddgSearch } from "./search.js";
@@ -11,6 +11,19 @@ const OLLAMA = (process.env.OLLAMA_HOST ?? (process.env.LLM_BASE_URL ?? "http://
 const VOICES: Record<string, string | undefined> = {
   maya: process.env.ELEVENLABS_VOICE_MAYA, kofi: process.env.ELEVENLABS_VOICE_KOFI, zee: process.env.ELEVENLABS_VOICE_ZEE,
 };
+const HOSTED = process.env.HOSTED === "1"; // public deployment: no model switching, rate limits on
+const rubrics = new Map<string, RubricPoint[]>();
+{
+  const c = JSON.parse(await readFile("curriculum/python.json", "utf8"));
+  for (const m of c.modules) for (const l of m.lessons) rubrics.set(l.id, l.rubric ?? []);
+}
+const hitLog = new Map<string, number[]>();
+function limited(req: IncomingMessage, key: string, max: number) {
+  if (!HOSTED) return false;
+  const k = key + ":" + (req.headers["x-forwarded-for"]?.toString().split(",")[0] ?? req.socket.remoteAddress), now = Date.now();
+  const arr = (hitLog.get(k) ?? []).filter((t) => now - t < 60_000);
+  arr.push(now); hitLog.set(k, arr); return arr.length > max;
+}
 const TYPES: Record<string, string> = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml" };
 
 // Model warm-up: the first request to a local model can take a long time, so do it before the student needs it.
@@ -41,7 +54,7 @@ createServer(async (req, res) => {
       return res.end(await readFile(join("public", rel)));
     }
     if (req.method === "GET" && url.pathname === "/api/config") {
-      return send(res, 200, { model: MODEL, ready, modelError, students: STUDENTS, elevenlabs: !!process.env.ELEVENLABS_API_KEY, shareUrl: process.env.SHARE_URL ?? "https://github.com/alifikan94/hacktober26" });
+      return send(res, 200, { model: MODEL, ready, modelError, students: STUDENTS, elevenlabs: !!process.env.ELEVENLABS_API_KEY, hosted: HOSTED, shareUrl: process.env.SHARE_URL ?? "https://github.com/alifikan94/hacktober26" });
     }
     if (req.method === "GET" && url.pathname === "/api/models") {
       try {
@@ -51,6 +64,7 @@ createServer(async (req, res) => {
       } catch { return send(res, 200, { current: MODEL, installed: [], unreachable: true }); }
     }
     if (req.method === "POST" && url.pathname === "/api/model") {
+      if (HOSTED) return send(res, 403, { error: "The model is set by the host." });
       const { model } = await body(req);
       if (typeof model !== "string" || !model.trim()) return send(res, 400, { error: "model required" });
       if (model !== MODEL) { setModel(model); epoch++; ready = false; modelError = ""; warming = false; void warm(); }
@@ -60,23 +74,30 @@ createServer(async (req, res) => {
       res.writeHead(200, { "content-type": "application/json" }); return res.end(await readFile("curriculum/python.json"));
     }
     if (req.method === "GET" && url.pathname === "/api/search") {
+      if (limited(req, "search", 20)) return send(res, 429, { error: "Too many searches. Try again in a minute." });
       const q = (url.searchParams.get("q") ?? "").trim().slice(0, 200);
       if (!q) return send(res, 400, { error: "q required" });
       try { return send(res, 200, { hits: await ddgSearch(q) }); }
       catch (e) { return send(res, 502, { error: "Search unavailable: " + (e as Error).message }); }
     }
     if (req.method === "POST" && url.pathname === "/api/turn") {
-      // Streams one JSON line per student as soon as each finishes, then a final "done" line.
-      const { sessionId, topic, code, utterance } = await body(req);
+      // Streams one JSON line per student as it finishes, then "coverage" (examiner) and "done".
+      if (limited(req, "turn", 20)) return send(res, 429, { error: "Slow down a little. Too many requests this minute." });
+      const { sessionId, lessonId, topic, code, utterance } = await body(req);
       if (!sessionId || !utterance?.trim()) return send(res, 400, { error: "sessionId and utterance required" });
       res.writeHead(200, { "content-type": "application/x-ndjson", "cache-control": "no-cache" }); res.flushHeaders();
       const line = (o: unknown) => res.write(JSON.stringify(o) + "\n");
       const prior = await loadSession(sessionId);
+      const rubric = rubrics.get(lessonId) ?? [], already = new Set(prior?.covered ?? []);
+      const teacherText = [...(prior?.history ?? []).filter((t) => t.who === "teacher").map((t) => t.text), utterance].join("\n");
       let firstError = "";
-      const replies = await classroomTurn({ topic: topic ?? "Python", code: code ?? "", history: prior?.history ?? [], utterance },
+      const exam = rubric.length ? examineTurn(rubric, teacherText).catch(() => ({ covered: [] as string[], attempts: 0 })) : Promise.resolve({ covered: [] as string[], attempts: 0 });
+      const replies = await classroomTurn({ topic: topic ?? "Python", code: code ?? "", history: prior?.history ?? [], utterance, uncovered: rubric.filter((r) => !already.has(r.id)) },
         (e) => { if (e.type === "error") firstError ||= e.message; line(e); });
       if (!replies.length) { line({ type: "fatal", message: firstError || "No reply from the model." }); return res.end(); }
-      const s = await saveTurn(sessionId, topic ?? "Python", code ?? "", utterance, replies);
+      const { covered } = await exam, all = [...new Set([...already, ...covered])];
+      const s = await saveTurn(sessionId, topic ?? "Python", code ?? "", utterance, replies, all);
+      line({ type: "coverage", covered: s.covered, total: rubric.length });
       line({ type: "done", understanding: s.understanding }); return res.end();
     }
     if (req.method === "GET" && url.pathname === "/api/report") {

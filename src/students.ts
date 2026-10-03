@@ -38,7 +38,13 @@ Ask things like "can you say that like I'm new? Like with a kitchen or a fuse bo
 export type StudentId = keyof typeof STUDENTS;
 
 export const agents = {} as Record<StudentId, Agent>;
+export const examiner = { agent: null as unknown as Agent };
+const EXAMINER = `You are a strict but fair examiner of a Python explanation. You are given a rubric of key ideas and everything the teacher said.
+Mark an idea covered ONLY if the teacher explained it correctly in their own words. Missing, vague, wrong, or merely repeating code without explaining = not covered.
+For covered ideas give a "quote": 10 to 120 characters copied EXACTLY, word for word, from the teacher's words. Never invent quotes.
+Reply with ONLY a JSON object, no markdown fences.`;
 function build() {
+  examiner.agent = new Agent({ id: "examiner", name: "Examiner", instructions: EXAMINER, model: provider(MODEL) });
   for (const [id, s] of Object.entries(STUDENTS)) {
     agents[id as StudentId] = new Agent({ id, name: s.name, instructions: s.instructions, model: provider(MODEL) });
   }

@@ -1,0 +1,18 @@
+# Render blueprint (untested). TeachBack needs an OpenAI-compatible endpoint serving an open model.
+services:
+  - type: web
+    name: teachback
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: HOSTED          # disables model switching, adds rate limits
+        value: "1"
+      - key: LLM_BASE_URL    # e.g. your Ollama/vLLM server on DigitalOcean: https://host/v1
+        sync: false
+      - key: LLM_MODEL       # e.g. gemma3:4b
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: SHARE_URL       # your public URL, used in share cards
+        sync: false

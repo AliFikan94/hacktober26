@@ -9,7 +9,7 @@
 </head>
 <body>
 <header class="bar" id="bar">
-  <div class="bar-left"><button class="iconbtn" id="sidebtn" aria-label="Toggle progress sidebar" title="Progress"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg></button><a class="brand" href="#/">Teach<i>Back</i></a></div>
+  <div class="bar-left"><a class="brand" href="#/">Teach<i>Back</i></a></div>
   <div class="bar-right">
     <button class="pill" id="pill" aria-haspopup="true" title="Choose the AI model"><span class="dot" id="dot"></span><b id="pillname">…</b></button>
     <svg class="ring-mini" viewBox="0 0 30 30" aria-hidden="true"><title>Course progress</title><circle class="t" cx="15" cy="15" r="12"/><circle class="p" id="ring" cx="15" cy="15" r="12" transform="rotate(-90 15 15)" stroke-dasharray="75.4" stroke-dashoffset="75.4"/></svg>
@@ -17,8 +17,7 @@
   </div>
 </header>
 <div id="banner"></div>
-<div class="shell" id="shell"><aside class="side" id="side" aria-label="Your progress"></aside><main id="view"></main></div>
-<div class="scrim" id="scrim"></div>
+<main id="view"></main>
 <div id="modal" class="modal hidden" role="dialog" aria-modal="true"></div>
 <script src="/app.js"></script>
 </body>
