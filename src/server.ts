@@ -27,15 +27,37 @@ function limited(req: IncomingMessage, key: string, max: number) {
 const TYPES: Record<string, string> = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml" };
 
 // Model warm-up: the first request to a local model can take a long time, so do it before the student needs it.
-let ready = false, modelError = "", warming = false, epoch = 0;
+// If the default model isn't installed, quietly pick a sensible installed one (unless LLM_MODEL was set on purpose).
+const explicitModel = !!process.env.LLM_MODEL;
+let ready = false, modelError = "", warming = false, epoch = 0, userPicked = false, nextTry = 0, backoff = 5000;
+async function installedModels(): Promise<string[] | null> {
+  try {
+    const d = (await (await fetch(OLLAMA + "/api/tags", { signal: AbortSignal.timeout(3000) })).json()) as { models?: { name: string }[] };
+    return (d.models ?? []).map((m) => m.name);
+  } catch { return null; }
+}
+const isCloudName = (n: string) => /(^|[-:])cloud$/.test(n);
+function pickModel(names: string[]): string | undefined {
+  const usable = names.filter((n) => !/embed/i.test(n));
+  return usable.find((n) => /gemma/i.test(n) && !isCloudName(n)) ?? usable.find((n) => !isCloudName(n)) ?? usable[0];
+}
 async function warm() {
   if (warming) return;
   warming = true; const mine = epoch;
-  try { await agents.maya.generate("Reply with the single word: OK"); if (mine === epoch) { ready = true; modelError = ""; } }
-  catch (e) { if (mine === epoch) { ready = false; modelError = String((e as Error).message ?? e); } }
-  finally { warming = false; }
+  try {
+    const names = await installedModels();
+    if (names && !names.some((n) => n === MODEL || n === MODEL + ":latest")) {
+      const pick = !explicitModel && !userPicked ? pickModel(names) : undefined;
+      if (pick) { console.log(`Model "${MODEL}" isn't installed, so using "${pick}"${isCloudName(pick) ? " (a cloud model: it runs on Ollama's servers)" : ""}. For a private local model run: ollama pull gemma3:4b`); setModel(pick); }
+      else { modelError = `"${MODEL}" isn't installed. Installed: ${names.join(", ") || "nothing"}.`; ready = false; nextTry = Date.now() + (backoff = Math.min(backoff * 2, 30000)); return; }
+    }
+    await agents.maya.generate("Reply with the single word: OK");
+    if (mine === epoch) { ready = true; modelError = ""; backoff = 5000; }
+  } catch (e) {
+    if (mine === epoch) { ready = false; modelError = String((e as Error).message ?? e).split("\n")[0].slice(0, 200); nextTry = Date.now() + (backoff = Math.min(backoff * 2, 30000)); }
+  } finally { warming = false; }
 }
-void warm(); setInterval(() => { if (!ready) void warm(); }, 5000).unref();
+void warm(); setInterval(() => { if (!ready && Date.now() >= nextTry) void warm(); }, 2000).unref();
 
 async function body(req: IncomingMessage) {
   let s = ""; for await (const c of req) s += c; return s ? JSON.parse(s) : {};
@@ -67,7 +89,7 @@ createServer(async (req, res) => {
       if (HOSTED) return send(res, 403, { error: "The model is set by the host." });
       const { model } = await body(req);
       if (typeof model !== "string" || !model.trim()) return send(res, 400, { error: "model required" });
-      if (model !== MODEL) { setModel(model); epoch++; ready = false; modelError = ""; warming = false; void warm(); }
+      if (model !== MODEL) { userPicked = true; setModel(model); epoch++; ready = false; modelError = ""; warming = false; backoff = 5000; nextTry = 0; void warm(); }
       return send(res, 200, { model: MODEL });
     }
     if (req.method === "GET" && url.pathname === "/api/curriculum") {
