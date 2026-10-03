@@ -1,6 +1,7 @@
 import { agents, STUDENTS, type StudentId } from "./students.js";
 
 export type Turn = { who: "teacher" | StudentId; text: string };
+export type TurnEvent = ({ type: "reply" } & Reply) | { type: "error"; id: StudentId; message: string };
 export type Reply = { id: StudentId; name: string; question: string; understanding: number };
 
 export function parseReply(raw: string): { question: string; understanding: number } {
@@ -24,7 +25,7 @@ function transcript(history: Turn[]) {
 /** One teaching turn: all three students react in parallel, each with its own personality. */
 export async function classroomTurn(opts: {
   topic: string; code: string; history: Turn[]; utterance: string;
-}): Promise<Reply[]> {
+}, onEvent?: (e: TurnEvent) => void): Promise<Reply[]> {
   const prompt = `Topic being taught: ${opts.topic}
 
 Code on the shared screen:
@@ -39,8 +40,13 @@ TEACHER just said: ${opts.utterance}
 
 Respond as yourself.`;
   const ids = Object.keys(agents) as StudentId[];
-  return Promise.all(ids.map(async (id) => {
-    const res = await agents[id].generate(prompt);
-    return { id, name: STUDENTS[id].name, ...parseReply(res.text) };
+  const replies: Reply[] = [];
+  await Promise.all(ids.map(async (id) => {
+    try {
+      const res = await agents[id].generate(prompt);
+      const r: Reply = { id, name: STUDENTS[id].name, ...parseReply(res.text) };
+      replies.push(r); onEvent?.({ type: "reply", ...r });
+    } catch (e) { onEvent?.({ type: "error", id, message: String((e as Error).message ?? e) }); }
   }));
+  return ids.flatMap((id) => replies.filter((r) => r.id === id));
 }

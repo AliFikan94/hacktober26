@@ -34,6 +34,9 @@ Use Chrome/Edge/Safari for the hold-to-talk mic. Click "Teach →" or release th
 | `MONGODB_URI` | Persist sessions in MongoDB Atlas (default: local `data/sessions.json`) |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_MAYA/KOFI/ZEE` | ElevenLabs voices (default: browser voices) |
 
+## Experience
+Calm, monochrome interface (system fonts, serif for reading). Colour appears only in the three students, shown as softly breathing orbs with a ring that fills as they understand. One clear "Continue" action per step. In the classroom, replies stream in as each student finishes, are spoken aloud, and the conversation is saved per lesson. Tap the mic to talk, tap again to send. Python errors get a plain-English explanation. The header pill shows the AI model and whether it runs on this device or in the cloud, and lets you switch models.
+
 ## Syllabus
 `curriculum/python.json`: 3 modules, 7 lessons (variables, numbers, conditionals, functions, loops/lists, dicts, error handling), all using electricity-distribution examples. Add a lesson by adding an object; no code changes needed. Progress is stored in the browser. A lesson's Teach step completes automatically when all three students score 7+/10.
 

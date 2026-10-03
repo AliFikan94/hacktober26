@@ -7,7 +7,7 @@ const provider = createOpenAICompatible({
   baseURL: process.env.LLM_BASE_URL ?? "http://localhost:11434/v1",
   apiKey: process.env.LLM_API_KEY ?? "ollama",
 });
-export const MODEL = process.env.LLM_MODEL ?? "gemma2:9b";
+export let MODEL = process.env.LLM_MODEL ?? "gemma2:9b";
 
 const RULES = `
 You are one of three AI students in a Python class. The human is the TEACHER and is explaining out loud while sharing code.
@@ -37,9 +37,13 @@ Ask things like "can you say that like I'm new? Like with a kitchen or a fuse bo
 } as const;
 export type StudentId = keyof typeof STUDENTS;
 
-export const agents = Object.fromEntries(
-  Object.entries(STUDENTS).map(([id, s]) => [
-    id,
-    new Agent({ id, name: s.name, instructions: s.instructions, model: provider(MODEL) }),
-  ]),
-) as Record<StudentId, Agent>;
+export const agents = {} as Record<StudentId, Agent>;
+function build() {
+  for (const [id, s] of Object.entries(STUDENTS)) {
+    agents[id as StudentId] = new Agent({ id, name: s.name, instructions: s.instructions, model: provider(MODEL) });
+  }
+}
+build();
+
+/** Switch models at runtime (the UI model picker). */
+export function setModel(model: string) { MODEL = model; build(); }
