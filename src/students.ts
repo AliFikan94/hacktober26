@@ -8,7 +8,7 @@ const provider = createOpenAICompatible({
   baseURL: process.env.LLM_BASE_URL ?? "http://localhost:11434/v1",
   apiKey: process.env.LLM_API_KEY ?? "ollama",
 });
-export let MODEL = process.env.LLM_MODEL ?? "gemma2:9b";
+export let MODEL = process.env.LLM_MODEL ?? "gemma3:4b";
 
 const RULES = `
 You are one of three AI students in a Python class. The human is the TEACHER and is explaining out loud while sharing code.

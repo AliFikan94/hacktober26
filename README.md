@@ -22,7 +22,7 @@ Each student also scores how well your explanation landed (0–10). If you can't
 Non-coders: double-click `start.bat` (Windows) or run `./start.sh` (Mac/Linux). It installs and opens the app.
 
 ```bash
-ollama pull gemma2:9b        # or any model; set LLM_MODEL
+ollama pull gemma3:4b        # or any model; set LLM_MODEL
 npm install
 npm start                    # http://localhost:3000
 npm test                     # smoke + search-parser tests, no Ollama needed
@@ -32,7 +32,7 @@ Use Chrome/Edge/Safari for the hold-to-talk mic. Click "Teach →" or release th
 ### Optional config (env vars)
 | Var | Effect |
 |---|---|
-| `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` | Any OpenAI-compatible endpoint (default `http://localhost:11434/v1`, `gemma2:9b`) |
+| `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` | Any OpenAI-compatible endpoint (default `http://localhost:11434/v1`, `gemma3:4b`) |
 | `MONGODB_URI` | Persist sessions in MongoDB Atlas (default: local `data/sessions.json`) |
 | `HOSTED=1` | Public deployment mode: model switching off, rate limits on (see `render.yaml`, untested) |
 | `SHARE_URL` | Link included when sharing milestones (default: this repo) |
