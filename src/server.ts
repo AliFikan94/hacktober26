@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
-import { classroomTurn, examineTurn, chooseSpeakers, type RubricPoint } from "./classroom.js";
+import { classroomTurn, examineTurn, chooseSpeakers, generateJson, tryParseReply, studentPrompt, type RubricPoint } from "./classroom.js";
 import { MODEL, STUDENTS, agents, setModel, type StudentId } from "./students.js";
 import { loadSession, saveTurn } from "./store.js";
 import { ddgSearch } from "./search.js";
@@ -80,6 +80,24 @@ createServer(async (req, res) => {
       if (model !== MODEL) { userPicked = true; setModel(model); epoch++; ready = false; modelError = ""; warming = false; backoff = 5000; nextTry = 0; void warm(); }
       return send(res, 200, { model: MODEL });
     }
+    if (req.method === "GET" && url.pathname === "/api/selftest") {
+      // One real student turn and one real examiner call, with plain-English results, so a failure can be pinpointed.
+      if (limited(req, "selftest", 3)) return send(res, 429, { error: "Too many tests. Try again in a minute." });
+      const out: Record<string, unknown> = { model: MODEL, ready, modelError };
+      const rubric = rubrics.get("variables") ?? [];
+      const good = "A variable is basically a name that I stick on a value, like a label on a transformer. I create it with the equals sign. Values come in types like int, float, str and bool.";
+      let t = Date.now();
+      try {
+        const r = await generateJson(agents.maya, studentPrompt({ topic: "Variables", code: 'voltage = 230\nprint(voltage)', history: [], utterance: good, output: "230", uncovered: rubric }), tryParseReply);
+        out.student = { ok: r.value !== null, attempts: r.attempts, seconds: +((Date.now() - t) / 1000).toFixed(1), said: r.value?.question ?? null, raw: r.value ? undefined : r.raw.slice(0, 300) };
+      } catch (e) { out.student = { ok: false, error: friendlyModelError(String((e as Error).message ?? e)) }; }
+      t = Date.now();
+      try {
+        const ex = await examineTurn(rubric, good);
+        out.examiner = { ok: true, covered: ex.covered.length, of: rubric.length, attempts: ex.attempts, seconds: +((Date.now() - t) / 1000).toFixed(1) };
+      } catch (e) { out.examiner = { ok: false, error: friendlyModelError(String((e as Error).message ?? e)) }; }
+      return send(res, 200, out);
+    }
     if (req.method === "GET" && url.pathname === "/api/curriculum") {
       res.writeHead(200, { "content-type": "application/json" }); return res.end(await readFile("curriculum/python.json"));
     }
@@ -105,13 +123,13 @@ createServer(async (req, res) => {
       const speakers = chooseSpeakers(utterance, lastSpeaker, Number(process.env.STUDENTS_PER_TURN ?? 1));
       line({ type: "speakers", ids: speakers });
       const longEnough = utterance.trim().split(/\s+/).length >= 6;
-      const exam = rubric.length && longEnough ? examineTurn(rubric, teacherText).catch(() => ({ covered: [] as string[], attempts: 0 })) : Promise.resolve({ covered: [] as string[], attempts: 0 });
+      const exam = rubric.length && longEnough ? examineTurn(rubric, teacherText).catch(() => ({ covered: [] as string[], attempts: 0, degraded: false })) : Promise.resolve({ covered: [] as string[], attempts: 0, degraded: false });
       const replies = await classroomTurn({ topic: topic ?? "Python", code: code ?? "", history: prior?.history ?? [], utterance, output: typeof output === "string" ? output : "", speakers, uncovered: rubric.filter((r) => !already.has(r.id)) },
         (e) => { if (e.type === "error") firstError ||= e.message; line(e); });
       if (!replies.length) { line({ type: "fatal", message: firstError || "No reply from the model." }); return res.end(); }
-      const { covered } = await exam, all = [...new Set([...already, ...covered])];
+      const { covered, degraded } = await exam, all = [...new Set([...already, ...covered])];
       const s = await saveTurn(sessionId, topic ?? "Python", code ?? "", utterance, replies, all);
-      line({ type: "coverage", covered: s.covered, total: rubric.length });
+      line({ type: "coverage", covered: s.covered, total: rubric.length, degraded: !!degraded });
       line({ type: "done", understanding: s.understanding }); return res.end();
     }
     if (req.method === "GET" && url.pathname === "/api/report") {

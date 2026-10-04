@@ -12,7 +12,7 @@ const fake = createServer(async (req, res) => {
 }).listen(0);
 await new Promise((r) => fake.once("listening", r));
 process.env.LLM_BASE_URL = `http://localhost:${(fake.address() as any).port}/v1`;
-const { classroomTurn, verifyCoverage, tryParseReply, chooseSpeakers } = await import("./classroom.js");
+const { classroomTurn, verifyCoverage, tryParseReply, chooseSpeakers, keywordCoverage } = await import("./classroom.js");
 const fail = (m: string) => { console.error("FAIL: " + m); process.exit(1); };
 
 const replies = await classroomTurn({ topic: "t", code: "print(1)", history: [], utterance: "it prints one" });
@@ -43,4 +43,9 @@ eq(chooseSpeakers("It always works and never fails.", undefined, 1), ["kofi"], "
 eq(chooseSpeakers("It is like a label on a box.", undefined, 1), ["maya"], "default -> Maya");
 eq(chooseSpeakers("It is like a label on a box.", "maya", 1), ["kofi"], "last speaker is rotated out");
 eq(chooseSpeakers("hi", undefined, 3).length, 3, "n=3 returns everyone");
-console.log("chooseSpeakers OK"); fake.close(); process.exit(0);
+console.log("chooseSpeakers OK");
+const cur = JSON.parse((await import("node:fs")).readFileSync("curriculum/python.json", "utf8")), vr = cur.modules[0].lessons[0].rubric;
+eq(keywordCoverage(vr, "A variable is a name for a value. int float and str are types, bool too."), ["name", "types"], "keywords: good explanation");
+eq(keywordCoverage(vr, "It's just a thing. You write it and it works."), [], "keywords: vague answer gets nothing");
+if (cur.modules.flatMap((m: any) => m.lessons).some((l: any) => l.rubric.some((r: any) => !r.keywords))) fail("every rubric point needs keywords");
+console.log("keywordCoverage OK"); fake.close(); process.exit(0);

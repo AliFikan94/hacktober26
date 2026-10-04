@@ -46,6 +46,22 @@ function updatePill() {
     ? `<div class="banner"><span><b>${esc(cfg.model)}</b> isn't available on this computer.</span><button class="btn sm" id="pick">Choose a model</button></div>` : "";
   if ($("pick")) $("pick").onclick = openPop;
 }
+async function runSelfTest(into) {
+  into.innerHTML = `<p>Testing the AI. On a small computer this can take a minute…</p>`;
+  try {
+    const d = await fetch("/api/selftest").then((r) => r.json());
+    const line = (ok, t) => `<div class="row2"><b style="min-width:0">${ok ? "✓" : "✗"}</b><span style="color:var(--ink)">${t}</span></div>`;
+    const st = d.student ?? {}, ex = d.examiner ?? {};
+    into.innerHTML = `<h4>Test result · ${esc(d.model)}</h4>` +
+      (st.error ? line(false, "A student couldn't answer: " + esc(st.error))
+        : line(st.ok, st.ok ? `A student answered in ${st.seconds}s: “${esc(st.said)}”` : `A student answered in the wrong format. The model said: “${esc(st.raw ?? "")}”. Try a bigger model.`)) +
+      (ex.error ? line(false, "The examiner failed: " + esc(ex.error))
+        : line(ex.covered >= 2, `The examiner found ${ex.covered} of ${ex.of} key ideas in a good explanation (should be 2 or 3)${ex.covered < 2 ? ". The model is too weak to judge. Try a bigger one." : "."}`)) +
+      (st.ok && st.seconds > 45 ? line(false, `Slow: ${st.seconds}s for one answer. Use a smaller model, or close other apps.`) : "") +
+      `<p><button class="link" id="again">Run again</button></p>`;
+    $("again").onclick = () => runSelfTest(into);
+  } catch (e) { into.innerHTML = `<p>Couldn't run the test: ${esc(e.message)}</p>`; }
+}
 async function loadConfig() { cfg = await fetch("/api/config").then((r) => r.json()); updatePill(); return cfg; }
 function startPoll() {
   clearInterval(pollTimer);
@@ -64,6 +80,8 @@ async function openPop() {
   if (cfg.hosted) { pop.innerHTML = `<h4>AI model</h4><p><b>${esc(cfg.model)}</b> is set by the host of this site.</p>${priv}`; return; }
   pop.innerHTML = `<h4>AI model</h4>${rows || `<p>${d.unreachable ? "Can't reach Ollama. Open the Ollama app, then try again." : "No models installed yet. In a terminal run <code>ollama pull gemma3:4b</code>."}</p>`}
     ${d.installed.some((m) => /gemma/i.test(m.name)) ? "" : `<p>Tip: a local Gemma model keeps the students on this device.</p>`}${priv}`;
+  pop.insertAdjacentHTML("beforeend", `<div class="priv"><h4>Not working?</h4><p><button class="btn sm soft" id="selftest">Test the students</button></p><div id="testout"></div></div>`);
+  $("selftest").onclick = () => runSelfTest($("testout"));
   pop.querySelectorAll(".opt").forEach((b) => (b.onclick = async () => {
     await fetch("/api/model", { method: "POST", body: JSON.stringify({ model: b.dataset.m }) });
     store.set("tb-model", b.dataset.m); pop.classList.add("hidden"); await loadConfig(); startPoll();
@@ -344,7 +362,7 @@ function viewTeach(l, stage) {
   }).catch(() => {});
 
   const autosize = () => { say.style.height = "auto"; say.style.height = Math.min(say.scrollHeight, 120) + "px"; $("send").disabled = busy || !say.value.trim(); };
-  let busy = false, turnsHere = 0, winShown = false;
+  let busy = false, turnsHere = 0, winShown = false, usedKeywords = false;
   function maybeAssist() {
     if (turnsHere < 6 || allCovered() || isDone(lid, "teach") || $("assist")) return;
     const d = document.createElement("div"); d.className = "assist"; d.id = "assist";
@@ -364,18 +382,18 @@ function viewTeach(l, stage) {
         if (ev.type === "speakers") { for (const id of ev.ids) { waits[id] = addStudent(id, null, "wait"); setThinking(id, true); } }
         else if (ev.type === "reply") { const w = waits[ev.id] ?? (waits[ev.id] = addStudent(ev.id, null, "wait")); fill(w, ev.question); setThinking(ev.id, false); setScore(ev.id, ev.understanding); speak(ev.id, ev.question); scrollDown(); }
         else if (ev.type === "error") { failed = true; if (waits[ev.id]) fill(waits[ev.id], "Couldn't think of anything this time.", "fail"); setThinking(ev.id, false); }
-        else if (ev.type === "coverage") { const fresh = ev.covered.filter((x) => !covered.includes(x)); setCovered(ev.covered, true); if (fresh.length) hint(`${fresh.length === 1 ? "Nice, one more idea covered" : fresh.length + " more ideas covered"}`); }
+        else if (ev.type === "coverage") { const fresh = ev.covered.filter((x) => !covered.includes(x)); setCovered(ev.covered, true); if (ev.degraded) { usedKeywords = true; if (fresh.length) hint("Counted by a simple keyword check (the AI judge couldn't read this turn)"); } else if (fresh.length) hint(`${fresh.length === 1 ? "Nice, one more idea covered" : fresh.length + " more ideas covered"}`); }
         else if (ev.type === "fatal") throw new Error(ev.message);
       }
       turnsHere++;
-      if (allCovered() && !winShown) { winShown = true; if (!isDone(lid, "teach")) { markDone(lid, "teach"); $("seg")?.querySelector('[data-p="teach"]')?.classList.add("done"); } addWin(); }
+      if (allCovered() && !winShown) { winShown = true; if (usedKeywords) { const a = store.get("tb-keyword", {}); a[lid] = true; store.set("tb-keyword", a); } if (!isDone(lid, "teach")) { markDone(lid, "teach"); $("seg")?.querySelector('[data-p="teach"]')?.classList.add("done"); } addWin(); }
       else maybeAssist();
     } catch (e) {
       if (!ctx.alive) return;
       for (const id of ids) { waits[id]?.remove(); setThinking(id, false); }
       const d = document.createElement("div"); d.className = "sys";
-      d.innerHTML = `${esc(e.message)}<br><button class="link" id="chk">Check the AI model</button>`; feed.appendChild(d); scrollDown();
-      d.querySelector("#chk").onclick = openPop; say.value = text; autosize();
+      d.innerHTML = `${esc(e.message)}<br><button class="link" id="chk">Test the AI</button>`; feed.appendChild(d); scrollDown();
+      d.querySelector("#chk").onclick = async () => { await openPop(); $("selftest")?.click(); }; say.value = text; autosize();
     }
     busy = false;
     if (ctx.alive) {
@@ -481,7 +499,7 @@ function certSVG(name, iso) {
     <line x1="300" y1="508" x2="900" y2="508" stroke="#1d1d1f" stroke-opacity=".3"/>
     <text x="600" y="565" text-anchor="middle" font-family="${SERIF}" font-size="26" fill="#1d1d1f">completed <tspan font-weight="700">${esc(course.title)}</tspan></text>
     <text x="600" y="606" text-anchor="middle" font-family="${SERIF}" font-size="22" fill="#6e6e73">${lessons.length} lessons, each taught back out loud to three AI students</text>
-    <text x="600" y="640" text-anchor="middle" font-family="${SERIF}" font-size="22" fill="#6e6e73">${st.turns} explanations given · ${lessons.length - Object.keys(store.get("tb-assisted", {})).length} of ${lessons.length} lessons verified by an examiner</text>
+    <text x="600" y="640" text-anchor="middle" font-family="${SERIF}" font-size="22" fill="#6e6e73">${st.turns} explanations given · ${lessons.filter((x) => !store.get("tb-assisted", {})[x.id] && !store.get("tb-keyword", {})[x.id]).length} of ${lessons.length} lessons verified by the AI examiner</text>
     <text x="150" y="738" font-family="${SANS}" font-size="16" fill="#6e6e73" letter-spacing="1">DATE</text><text x="150" y="766" font-family="${SERIF}" font-size="24" fill="#1d1d1f">${esc(fmtDate(iso))}</text>
     <text x="1050" y="738" text-anchor="end" font-family="${SANS}" font-size="16" fill="#6e6e73" letter-spacing="1">CERTIFICATE ID</text><text x="1050" y="766" text-anchor="end" font-family="${SANS}" font-size="22" font-weight="600" fill="#1d1d1f" letter-spacing="1">${certId(nm, iso)}</text>
     <text x="600" y="790" text-anchor="middle" font-family="${SANS}" font-size="13" fill="#a1a1a6">Self-paced learning certificate issued by TeachBack. Not an accredited qualification.</text></svg>`;

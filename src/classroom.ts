@@ -4,7 +4,7 @@ import type { Agent } from "@mastra/core/agent";
 export type Turn = { who: "teacher" | StudentId; text: string };
 export type Reply = { id: StudentId; name: string; question: string; understanding: number };
 export type TurnEvent = ({ type: "reply" } & Reply) | { type: "error"; id: StudentId; message: string };
-export type RubricPoint = { id: string; label: string; point: string };
+export type RubricPoint = { id: string; label: string; point: string; keywords?: { terms: string[]; min: number } };
 
 const firstJson = (raw: string) => raw.match(/\{[\s\S]*\}/)?.[0] ?? null;
 
@@ -63,7 +63,13 @@ export function verifyCoverage(raw: string, rubric: RubricPoint[], teacherText: 
   return ok;
 }
 
-export async function examineTurn(rubric: RubricPoint[], teacherText: string): Promise<{ covered: string[]; attempts: number }> {
+/** Fallback when the AI judge can't produce usable output: count rubric keywords in what the teacher said. Cruder, and labelled as such. */
+export function keywordCoverage(rubric: RubricPoint[], teacherText: string): string[] {
+  const t = teacherText.toLowerCase();
+  return rubric.filter((r) => r.keywords && r.keywords.terms.filter((x) => new RegExp(x, "i").test(t)).length >= r.keywords.min).map((r) => r.id);
+}
+
+export async function examineTurn(rubric: RubricPoint[], teacherText: string): Promise<{ covered: string[]; attempts: number; degraded?: boolean }> {
   const prompt = `RUBRIC (key ideas a good explanation must include):
 ${rubric.map((r) => `- id "${r.id}": ${r.point}`).join("\n")}
 
@@ -74,6 +80,7 @@ ${teacherText}
 
 Reply ONLY with JSON: {"points":[{"id":"<rubric id>","covered":true or false,"quote":"<4 to 15 words copied from the teacher, or empty>"}]} with one entry per rubric id.`;
   const { raw, attempts } = await generateJson(examiner.agent, prompt, (r) => (firstJson(r) ? r : null));
+  if (!firstJson(raw)) return { covered: keywordCoverage(rubric, teacherText), attempts, degraded: true }; // judge answered in prose: use the keyword check
   return { covered: verifyCoverage(raw, rubric, teacherText), attempts };
 }
 

@@ -38,17 +38,44 @@
             {
               "id": "name",
               "label": "A variable names a value",
-              "point": "A variable is a name (label) attached to a value, created with the = sign."
+              "point": "A variable is a name (label) attached to a value, created with the = sign.",
+              "keywords": {
+                "terms": [
+                  "variable",
+                  "name|label|tag|box|container|store|hold|refer",
+                  "value|data"
+                ],
+                "min": 3
+              }
             },
             {
               "id": "types",
               "label": "Types: int, float, str, bool",
-              "point": "Values have types such as int, float, str and bool, and type() shows which one."
+              "point": "Values have types such as int, float, str and bool, and type() shows which one.",
+              "keywords": {
+                "terms": [
+                  "int|integer",
+                  "float|decimal",
+                  "str|string|text",
+                  "bool|boolean|true|false",
+                  "type"
+                ],
+                "min": 3
+              }
             },
             {
               "id": "rules",
               "label": "Naming rules",
-              "point": "Variable names are case-sensitive, cannot start with a digit, and use snake_case by convention."
+              "point": "Variable names are case-sensitive, cannot start with a digit, and use snake_case by convention.",
+              "keywords": {
+                "terms": [
+                  "case.?sensitive|capital|uppercase|lowercase",
+                  "digit|number|numeral",
+                  "snake|underscore",
+                  "space"
+                ],
+                "min": 2
+              }
             }
           ]
         },
@@ -80,17 +107,46 @@
             {
               "id": "ops",
               "label": "The basic operators",
-              "point": "Python has + - * / for arithmetic and also // (floor division), % (remainder) and ** (power)."
+              "point": "Python has + - * / for arithmetic and also // (floor division), % (remainder) and ** (power).",
+              "keywords": {
+                "terms": [
+                  "plus|add",
+                  "minus|subtract",
+                  "times|multipl",
+                  "divid",
+                  "power|exponent",
+                  "modulo|remainder",
+                  "floor"
+                ],
+                "min": 4
+              }
             },
             {
               "id": "division",
               "label": "/ vs // vs %",
-              "point": "/ always returns a float, // rounds down to a whole number, and % gives the remainder."
+              "point": "/ always returns a float, // rounds down to a whole number, and % gives the remainder.",
+              "keywords": {
+                "terms": [
+                  "divid",
+                  "floor|whole number|round down|integer",
+                  "modulo|remainder",
+                  "float|decimal"
+                ],
+                "min": 3
+              }
             },
             {
               "id": "rounding",
               "label": "Floats and rounding",
-              "point": "Floats are approximate (0.1+0.2 is not exactly 0.3), so use round() when displaying money or kWh."
+              "point": "Floats are approximate (0.1+0.2 is not exactly 0.3), so use round() when displaying money or kWh.",
+              "keywords": {
+                "terms": [
+                  "float|decimal",
+                  "approximate|not exact|precision|inaccura|point one",
+                  "round"
+                ],
+                "min": 2
+              }
             }
           ]
         },
@@ -122,17 +178,45 @@
             {
               "id": "compare",
               "label": "Comparisons make booleans",
-              "point": "Comparison operators such as == != < > produce True or False, and and/or/not combine them."
+              "point": "Comparison operators such as == != < > produce True or False, and and/or/not combine them.",
+              "keywords": {
+                "terms": [
+                  "equal",
+                  "not equal|different",
+                  "less|greater|bigger|smaller|more than|fewer",
+                  "true|false|boolean",
+                  "and|or|not"
+                ],
+                "min": 3
+              }
             },
             {
               "id": "branches",
               "label": "if / elif / else",
-              "point": "if/elif/else chooses exactly one path to run based on conditions."
+              "point": "if/elif/else chooses exactly one path to run based on conditions.",
+              "keywords": {
+                "terms": [
+                  "\\bif\\b",
+                  "elif|else if",
+                  "\\belse\\b",
+                  "one path|only one|first|branch|choose|picks"
+                ],
+                "min": 3
+              }
             },
             {
               "id": "pitfalls",
               "label": "Indentation and == vs =",
-              "point": "Indentation defines what is inside the if block, and = assigns while == compares."
+              "point": "Indentation defines what is inside the if block, and = assigns while == compares.",
+              "keywords": {
+                "terms": [
+                  "indent|space|tab",
+                  "double equal|two equal|compare",
+                  "assign|single equal",
+                  "colon"
+                ],
+                "min": 2
+              }
             }
           ]
         }
@@ -174,17 +258,42 @@
             {
               "id": "what",
               "label": "What a function is",
-              "point": "A function is a reusable block of steps defined with def, taking parameters."
+              "point": "A function is a reusable block of steps defined with def, taking parameters.",
+              "keywords": {
+                "terms": [
+                  "\\bdef\\b|define",
+                  "function",
+                  "parameter|argument|input",
+                  "reuse|again|repeat|package|block"
+                ],
+                "min": 3
+              }
             },
             {
               "id": "return",
               "label": "return vs print",
-              "point": "return hands a value back to the caller, while print only shows text; no return means None."
+              "point": "return hands a value back to the caller, while print only shows text; no return means None.",
+              "keywords": {
+                "terms": [
+                  "return",
+                  "print",
+                  "none|nothing|hand back|give back|send back|gives back"
+                ],
+                "min": 2
+              }
             },
             {
               "id": "scope",
               "label": "Local scope",
-              "point": "Variables created inside a function are local and cannot be seen outside it."
+              "point": "Variables created inside a function are local and cannot be seen outside it.",
+              "keywords": {
+                "terms": [
+                  "local",
+                  "scope|inside|outside|only exist|vanish|disappear",
+                  "function"
+                ],
+                "min": 2
+              }
             }
           ]
         },
@@ -220,17 +329,42 @@
             {
               "id": "lists",
               "label": "Lists and indexing",
-              "point": "A list holds ordered values and indexing starts at 0."
+              "point": "A list holds ordered values and indexing starts at 0.",
+              "keywords": {
+                "terms": [
+                  "list",
+                  "index|position",
+                  "zero|\\b0\\b|first"
+                ],
+                "min": 2
+              }
             },
             {
               "id": "for",
               "label": "for loops",
-              "point": "A for loop repeats the indented code once for each item in the list."
+              "point": "A for loop repeats the indented code once for each item in the list.",
+              "keywords": {
+                "terms": [
+                  "\\bfor\\b",
+                  "each|every|item|element",
+                  "repeat|loop|once"
+                ],
+                "min": 3
+              }
             },
             {
               "id": "tools",
               "label": "len, sum, append, while",
-              "point": "Helpers like len(), sum() and .append() exist, and a while loop repeats until its condition is false and can run forever if never false."
+              "point": "Helpers like len(), sum() and .append() exist, and a while loop repeats until its condition is false and can run forever if never false.",
+              "keywords": {
+                "terms": [
+                  "\\blen\\b|length",
+                  "\\bsum\\b|total",
+                  "append|add",
+                  "while"
+                ],
+                "min": 2
+              }
             }
           ]
         }
@@ -268,17 +402,43 @@
             {
               "id": "map",
               "label": "Keys map to values",
-              "point": "A dictionary maps keys to values, like a lookup table."
+              "point": "A dictionary maps keys to values, like a lookup table.",
+              "keywords": {
+                "terms": [
+                  "dictionar",
+                  "\\bkey",
+                  "value",
+                  "lookup|map|pair|label"
+                ],
+                "min": 3
+              }
             },
             {
               "id": "get",
               "label": "[] vs .get()",
-              "point": "d[key] raises an error if the key is missing, while d.get(key, default) is a safe lookup."
+              "point": "d[key] raises an error if the key is missing, while d.get(key, default) is a safe lookup.",
+              "keywords": {
+                "terms": [
+                  "\\bget\\b",
+                  "bracket|square",
+                  "error|keyerror|crash|missing|default|safe"
+                ],
+                "min": 2
+              }
             },
             {
               "id": "items",
               "label": "Looping with .items()",
-              "point": "for key, value in d.items() loops over both keys and values."
+              "point": "for key, value in d.items() loops over both keys and values.",
+              "keywords": {
+                "terms": [
+                  "items",
+                  "\\bfor\\b",
+                  "\\bkey",
+                  "value"
+                ],
+                "min": 3
+              }
             }
           ]
         },
@@ -310,17 +470,41 @@
             {
               "id": "why",
               "label": "Why errors happen",
-              "point": "Real data is messy (empty lists, text instead of numbers, missing values) and an uncaught error stops the program."
+              "point": "Real data is messy (empty lists, text instead of numbers, missing values) and an uncaught error stops the program.",
+              "keywords": {
+                "terms": [
+                  "error|crash|stop|exception",
+                  "empty|messy|missing|bad|invalid|text|zero",
+                  "data|input|real"
+                ],
+                "min": 2
+              }
             },
             {
               "id": "try",
               "label": "try / except",
-              "point": "Risky code goes in try: and the handling code goes in except: so the program continues."
+              "point": "Risky code goes in try: and the handling code goes in except: so the program continues.",
+              "keywords": {
+                "terms": [
+                  "\\btry\\b",
+                  "except",
+                  "continue|keeps going|catch|handle"
+                ],
+                "min": 2
+              }
             },
             {
               "id": "specific",
               "label": "Catch specific errors",
-              "point": "Catch specific errors like ValueError or ZeroDivisionError rather than everything, and raise can create your own errors."
+              "point": "Catch specific errors like ValueError or ZeroDivisionError rather than everything, and raise can create your own errors.",
+              "keywords": {
+                "terms": [
+                  "specific|valueerror|zerodivision|type of error",
+                  "catch|except",
+                  "raise|own error"
+                ],
+                "min": 2
+              }
             }
           ]
         }
