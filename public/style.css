@@ -221,3 +221,6 @@ pre.ex { margin:0; padding:16px 20px; font:400 14px/22px var(--mono); white-spac
   body { background:#fff; } .bar, .side, .scrim, .noprint, #banner, .modal { display:none !important; }
   .shell { display:block; } .page { max-width:none; padding:0; animation:none; } .certwrap { box-shadow:none; border-radius:0; }
 }
+
+.hfrow { display:flex; justify-content:center; margin-top:2px; } .hfrow .link.on { color:#ff3b30; font-weight:600; }
+.screen .console { flex:none; }

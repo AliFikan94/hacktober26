@@ -35,19 +35,30 @@ export async function generateJson<T>(agent: Agent, prompt: string, parse: (raw:
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
+/** A quote counts if it is really in what the teacher said: verbatim, or a close paraphrase sharing a run of words. */
+export function grounded(quote: string, teacherText: string): boolean {
+  const said = norm(teacherText), qw = norm(quote).split(" ").filter(Boolean);
+  if (qw.length < 3) return false;
+  if (said.includes(qw.join(" "))) return true;
+  const vocab = new Set(said.split(" "));
+  if (qw.filter((w) => vocab.has(w)).length / qw.length < 0.75) return false;
+  for (let i = 0; i + 3 <= qw.length; i++) if (said.includes(qw.slice(i, i + 3).join(" "))) return true;
+  return false;
+}
+
 /**
- * The examiner may only mark an idea covered if its quote really appears in what the teacher said.
- * This stops the model from hallucinating mastery.
+ * The examiner may only mark an idea covered if its evidence is really in what the teacher said.
+ * This stops the model from hallucinating mastery, while tolerating small paraphrases from small models.
  */
 export function verifyCoverage(raw: string, rubric: RubricPoint[], teacherText: string): string[] {
   const j = firstJson(raw);
   if (!j) return [];
   let pts: { id?: string; covered?: boolean; quote?: string }[] = [];
   try { pts = JSON.parse(j).points ?? []; } catch { return []; }
-  const said = norm(teacherText), ok: string[] = [];
+  const ok: string[] = [];
   for (const r of rubric) {
     const p = pts.find((x) => x.id === r.id);
-    if (p?.covered === true && typeof p.quote === "string" && norm(p.quote).length >= 10 && said.includes(norm(p.quote))) ok.push(r.id);
+    if (p?.covered === true && typeof p.quote === "string" && grounded(p.quote, teacherText)) ok.push(r.id);
   }
   return ok;
 }
@@ -61,16 +72,27 @@ EVERYTHING THE TEACHER HAS SAID SO FAR:
 ${teacherText}
 """
 
-Reply ONLY with JSON: {"points":[{"id":"<rubric id>","covered":true or false,"quote":"<exact words from the teacher, or empty>"}]} with one entry per rubric id.`;
+Reply ONLY with JSON: {"points":[{"id":"<rubric id>","covered":true or false,"quote":"<4 to 15 words copied from the teacher, or empty>"}]} with one entry per rubric id.`;
   const { raw, attempts } = await generateJson(examiner.agent, prompt, (r) => (firstJson(r) ? r : null));
   return { covered: verifyCoverage(raw, rubric, teacherText), attempts };
+}
+
+/** Like a real class, one or two students chime in per turn. Pick who by what the teacher just said. */
+export function chooseSpeakers(utterance: string, last: StudentId | undefined, n: number): StudentId[] {
+  const t = utterance.toLowerCase();
+  const jargon = (t.match(/\b(variable|function|parameter|argument|operator|index|iterate|boolean|integer|string|float|scope|return|loop|dictionary|exception|syntax|type)s?\b/g) ?? []).length;
+  const analogy = /\b(like|imagine|for example|think of|similar to|such as|as if)\b/.test(t);
+  const claim = /\b(always|never|every|all|only|must)\b/.test(t);
+  const score: Record<StudentId, number> = { maya: 1, kofi: claim ? 2 : 0.5, zee: jargon >= 2 && !analogy ? 3 : 0.5 };
+  if (last) score[last] -= 1.5;
+  return (Object.keys(score) as StudentId[]).sort((a, b) => score[b] - score[a]).slice(0, Math.max(1, Math.min(3, n)));
 }
 
 function transcript(history: Turn[]) {
   return history.map((t) => `${t.who === "teacher" ? "TEACHER" : STUDENTS[t.who].name.toUpperCase()}: ${t.text}`).join("\n");
 }
 
-export function studentPrompt(opts: { topic: string; code: string; history: Turn[]; utterance: string; uncovered?: RubricPoint[] }) {
+export function studentPrompt(opts: { topic: string; code: string; history: Turn[]; utterance: string; uncovered?: RubricPoint[]; output?: string }) {
   const gaps = opts.uncovered?.length
     ? `\nKey ideas the teacher has NOT explained yet (never reveal this list; when natural, steer your question toward one of them):\n${opts.uncovered.map((r) => `- ${r.point}`).join("\n")}\n` : "";
   return `Topic being taught: ${opts.topic}
@@ -79,6 +101,9 @@ Code on the shared screen:
 \`\`\`python
 ${opts.code}
 \`\`\`
+
+Terminal (what appeared when the teacher last ran this code):
+${opts.output?.trim() ? opts.output.trim().slice(0, 800) : "(they haven't run it yet)"}
 
 Conversation so far:
 ${transcript(opts.history) || "(none yet)"}
@@ -90,10 +115,10 @@ Respond as yourself.`;
 
 /** One teaching turn: all three students react in parallel, each streamed as it lands. */
 export async function classroomTurn(opts: {
-  topic: string; code: string; history: Turn[]; utterance: string; uncovered?: RubricPoint[];
+  topic: string; code: string; history: Turn[]; utterance: string; uncovered?: RubricPoint[]; output?: string; speakers?: StudentId[];
 }, onEvent?: (e: TurnEvent) => void): Promise<Reply[]> {
   const prompt = studentPrompt(opts);
-  const ids = Object.keys(agents) as StudentId[];
+  const ids = opts.speakers?.length ? opts.speakers : (Object.keys(agents) as StudentId[]);
   const replies: Reply[] = [];
   await Promise.all(ids.map(async (id) => {
     try {

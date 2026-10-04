@@ -49,6 +49,21 @@ ollama pull gemma3:1b
 ```
 Small models are weaker at strict JSON and at judging, so run `npm run doctor`. You can use a stronger model only for the examiner with `EXAMINER_MODEL` (note that sends what you say to that model's server if it's a cloud model).
 
+## How Teach works (the tech)
+```
+ mic ──▶ browser speech-to-text ──▶ text ─┐
+ code editor + terminal output ───────────┼─▶ POST /api/turn ─▶ server
+                                          │      ├─ picks who speaks (rule-based: Zee for jargon, Kofi for absolutes, rotate)
+                                          │      ├─ that student (Mastra agent ▶ open model via Ollama) ─▶ one JSON reply, streamed back
+                                          │      └─ examiner (Mastra agent) ─▶ which key ideas you explained, evidence must be in your words
+ speakers ◀── browser text-to-speech (or ElevenLabs) ◀── reply text
+```
+- **They "hear" a transcript, not audio.** Speech becomes text in the browser (Chrome/Edge/Safari). The language model only ever sees text, plus the code and the terminal output as text.
+- **They "see" what is on the shared screen:** the code in the editor and what the last Run printed, sent with every turn.
+- **Turn-taking:** tap the mic to talk and tap to send, or switch on *Hands-free*: it detects a pause (~1.7s), sends, lets the student answer out loud, then listens again. It does not listen while a student is talking (so it never hears itself), and tapping the mic interrupts them.
+- **One student chimes in per turn** (set `STUDENTS_PER_TURN=3` for all three). This keeps it fast on small computers.
+- **Not real-time duplex:** no interrupting mid-sentence and no tone-of-voice understanding. That would need an audio-native model and streaming audio.
+
 ## How "teach it back" is judged
 Each lesson has 3 key ideas (`rubric` in `curriculum/python.json`). A separate **examiner** agent checks, after every explanation, which ideas you covered correctly in your own words. It must **quote you word for word**, and the server rejects any quote that is not really in what you said, so the model cannot hallucinate mastery. The students are told which ideas are still missing and steer their questions there. The lesson completes when all ideas are covered. (After 8 explanations an "Finish anyway" escape hatch appears; the certificate then reports how many lessons were examiner-verified.)
 

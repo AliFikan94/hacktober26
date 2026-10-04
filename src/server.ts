@@ -1,8 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
-import { classroomTurn, examineTurn, type RubricPoint } from "./classroom.js";
-import { MODEL, STUDENTS, agents, setModel } from "./students.js";
+import { classroomTurn, examineTurn, chooseSpeakers, type RubricPoint } from "./classroom.js";
+import { MODEL, STUDENTS, agents, setModel, type StudentId } from "./students.js";
 import { loadSession, saveTurn } from "./store.js";
 import { ddgSearch } from "./search.js";
 import { OLLAMA, installedModels, autoSelect, isCloudName, names, friendlyModelError } from "./models.js";
@@ -93,7 +93,7 @@ createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/turn") {
       // Streams one JSON line per student as it finishes, then "coverage" (examiner) and "done".
       if (limited(req, "turn", 20)) return send(res, 429, { error: "Slow down a little. Too many requests this minute." });
-      const { sessionId, lessonId, topic, code, utterance } = await body(req);
+      const { sessionId, lessonId, topic, code, utterance, output } = await body(req);
       if (!sessionId || !utterance?.trim()) return send(res, 400, { error: "sessionId and utterance required" });
       res.writeHead(200, { "content-type": "application/x-ndjson", "cache-control": "no-cache" }); res.flushHeaders();
       const line = (o: unknown) => res.write(JSON.stringify(o) + "\n");
@@ -101,8 +101,12 @@ createServer(async (req, res) => {
       const rubric = rubrics.get(lessonId) ?? [], already = new Set(prior?.covered ?? []);
       const teacherText = [...(prior?.history ?? []).filter((t) => t.who === "teacher").map((t) => t.text), utterance].join("\n");
       let firstError = "";
-      const exam = rubric.length ? examineTurn(rubric, teacherText).catch(() => ({ covered: [] as string[], attempts: 0 })) : Promise.resolve({ covered: [] as string[], attempts: 0 });
-      const replies = await classroomTurn({ topic: topic ?? "Python", code: code ?? "", history: prior?.history ?? [], utterance, uncovered: rubric.filter((r) => !already.has(r.id)) },
+      const lastSpeaker = [...(prior?.history ?? [])].reverse().find((t) => t.who !== "teacher")?.who as StudentId | undefined;
+      const speakers = chooseSpeakers(utterance, lastSpeaker, Number(process.env.STUDENTS_PER_TURN ?? 1));
+      line({ type: "speakers", ids: speakers });
+      const longEnough = utterance.trim().split(/\s+/).length >= 6;
+      const exam = rubric.length && longEnough ? examineTurn(rubric, teacherText).catch(() => ({ covered: [] as string[], attempts: 0 })) : Promise.resolve({ covered: [] as string[], attempts: 0 });
+      const replies = await classroomTurn({ topic: topic ?? "Python", code: code ?? "", history: prior?.history ?? [], utterance, output: typeof output === "string" ? output : "", speakers, uncovered: rubric.filter((r) => !already.has(r.id)) },
         (e) => { if (e.type === "error") firstError ||= e.message; line(e); });
       if (!replies.length) { line({ type: "fatal", message: firstError || "No reply from the model." }); return res.end(); }
       const { covered } = await exam, all = [...new Set([...already, ...covered])];

@@ -279,7 +279,7 @@ function viewTeach(l, stage) {
   const ctx = { alive: true }; cleanup = () => { ctx.alive = false; stopSpeaking(); try { rec?.abort(); } catch {} };
   const C = 2 * Math.PI * 29;
   stage.innerHTML = `<div class="teach">
-    <section class="code-card screen"><div class="code-head"><span>shared screen</span><span class="acts"><button class="chipbtn" id="mine">Use my code</button><button class="chipbtn" id="fresh">New chat</button></span></div><div id="edslot" style="display:flex;flex:1;min-height:0"></div></section>
+    <section class="code-card screen"><div class="code-head"><span>shared screen · the students can see this</span><span class="acts"><button class="chipbtn" id="mine" title="Copy the code from your Workshop">My workshop code</button><button class="chipbtn" id="fresh">New chat</button><button class="chipbtn go" id="trun">${ICON.play} Run</button></span></div><div id="edslot" style="display:flex;flex:1;min-height:0"></div><div class="console" id="tcon" style="max-height:150px"><span class="lbl">Terminal · the students see this too</span><span class="body muted">Run the code and talk through what happens.</span></div></section>
     <section class="room">
       <div class="orbs">${ids.map((id) => `<div class="student" id="s-${id}" style="--c:var(--${id})"><div class="orbwrap"><svg viewBox="0 0 64 64"><circle class="t" cx="32" cy="32" r="29"/><circle class="p" cx="32" cy="32" r="29" stroke-dasharray="${C}" stroke-dashoffset="${C}"/></svg><div class="orb"></div></div>
         <div class="nm">${cfg.students[id].name}</div><div class="rl">${esc(cfg.students[id].role)}</div><div class="score"></div></div>`).join("")}</div>
@@ -288,11 +288,23 @@ function viewTeach(l, stage) {
       <div class="composer"><div class="cbox"><textarea id="say" rows="1" placeholder="Type, or tap the mic and talk"></textarea>
         <button class="round ghost" id="mute" aria-label="Toggle spoken replies" title="Spoken replies"></button>
         <button class="round" id="mic" aria-label="Speak" title="Speak">${ICON.mic}</button>
-        <button class="round" id="send" aria-label="Send" title="Send" disabled>${ICON.send}</button></div><p class="hint" id="hint"></p></div>
+        <button class="round" id="send" aria-label="Send" title="Send" disabled>${ICON.send}</button></div><p class="hint" id="hint"></p><div class="hfrow"><button class="link" id="hf" title="Talk naturally. The students answer when you pause, then listen again.">Hands-free: off</button></div></div>
     </section></div>`;
   const key = `tb-code-${lid}-teach`;
-  const ed = createEditor({ value: store.get(key, l.example), onChange: (v) => store.set(key, v) });
+  const ed = createEditor({ value: store.get(key, store.get(`tb-code-${lid}-workshop`, store.get(`tb-code-${lid}-practice`, l.example))), onChange: (v) => store.set(key, v) });
   $("edslot").appendChild(ed.el);
+  let lastRun = null; // what the students see in the terminal
+  const tcon = $("tcon"), tbody = () => tcon.querySelector(".body");
+  async function runShared() {
+    if ($("trun").disabled) return; $("trun").disabled = true; tcon.classList.remove("err"); tbody().className = "body muted"; tbody().textContent = pyWarm ? "Running…" : "Starting Python for the first time…";
+    try {
+      const { out, error } = await runPython(ed.get());
+      if (error) { tcon.classList.add("err"); tbody().className = "body"; const t = (out || "") + error.split("\n").slice(-3).join("\n"); tbody().textContent = t; lastRun = "ERROR:\n" + t; }
+      else { tbody().className = out ? "body" : "body muted"; tbody().textContent = out || "Ran fine. Nothing was printed."; lastRun = out || "(ran with no output)"; }
+    } catch (e) { tcon.classList.add("err"); tbody().className = "body"; tbody().textContent = e.message; lastRun = null; }
+    $("trun").disabled = false;
+  }
+  $("trun").onclick = runShared;
   const feed = $("feed"), say = $("say"), hint = (t, live) => { $("hint").textContent = t; $("hint").className = "hint" + (live ? " live" : ""); };
   const scrollDown = () => (feed.scrollTop = feed.scrollHeight);
   const resetHint = () => hint("Enter to send · Shift + Enter for a new line");
@@ -334,7 +346,7 @@ function viewTeach(l, stage) {
   const autosize = () => { say.style.height = "auto"; say.style.height = Math.min(say.scrollHeight, 120) + "px"; $("send").disabled = busy || !say.value.trim(); };
   let busy = false, turnsHere = 0, winShown = false;
   function maybeAssist() {
-    if (turnsHere < 8 || allCovered() || isDone(lid, "teach") || $("assist")) return;
+    if (turnsHere < 6 || allCovered() || isDone(lid, "teach") || $("assist")) return;
     const d = document.createElement("div"); d.className = "assist"; d.id = "assist";
     d.innerHTML = `<button class="link">Taking long? Finish this lesson anyway</button>`; feed.appendChild(d); scrollDown();
     d.querySelector("button").onclick = () => { const a = store.get("tb-assisted", {}); a[lid] = true; store.set("tb-assisted", a); winShown = true; markDone(lid, "teach"); $("seg")?.querySelector('[data-p="teach"]')?.classList.add("done"); d.remove(); addWin(); };
@@ -342,16 +354,16 @@ function viewTeach(l, stage) {
   async function send() {
     const text = say.value.trim(); if (busy || !text) return;
     busy = true; { const st = store.get("tb-stats", { turns: 0 }); st.turns++; store.set("tb-stats", st); } stopSpeaking(); addYou(text); say.value = ""; autosize(); hint("The students are thinking…");
-    const waits = {}, latest = {}; let failed = false;
-    for (const id of ids) { waits[id] = addStudent(id, null, "wait"); setThinking(id, true); }
+    const waits = {}; let failed = false;
     try {
-      const r = await fetch("/api/turn", { method: "POST", body: JSON.stringify({ sessionId: sid, lessonId: lid, topic: l.teach.topic, code: ed.get(), utterance: text }) });
+      const r = await fetch("/api/turn", { method: "POST", body: JSON.stringify({ sessionId: sid, lessonId: lid, topic: l.teach.topic, code: ed.get(), utterance: text, output: lastRun ?? "" }) });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Server error " + r.status);
       for await (const line of readLines(r.body)) {
         if (!ctx.alive) return;
         const ev = JSON.parse(line);
-        if (ev.type === "reply") { fill(waits[ev.id], ev.question); setThinking(ev.id, false); setScore(ev.id, ev.understanding); latest[ev.id] = ev.understanding; speak(ev.id, ev.question); scrollDown(); }
-        else if (ev.type === "error") { failed = true; fill(waits[ev.id], "Couldn't think of a question this time.", "fail"); setThinking(ev.id, false); }
+        if (ev.type === "speakers") { for (const id of ev.ids) { waits[id] = addStudent(id, null, "wait"); setThinking(id, true); } }
+        else if (ev.type === "reply") { const w = waits[ev.id] ?? (waits[ev.id] = addStudent(ev.id, null, "wait")); fill(w, ev.question); setThinking(ev.id, false); setScore(ev.id, ev.understanding); speak(ev.id, ev.question); scrollDown(); }
+        else if (ev.type === "error") { failed = true; if (waits[ev.id]) fill(waits[ev.id], "Couldn't think of anything this time.", "fail"); setThinking(ev.id, false); }
         else if (ev.type === "coverage") { const fresh = ev.covered.filter((x) => !covered.includes(x)); setCovered(ev.covered, true); if (fresh.length) hint(`${fresh.length === 1 ? "Nice, one more idea covered" : fresh.length + " more ideas covered"}`); }
         else if (ev.type === "fatal") throw new Error(ev.message);
       }
@@ -360,12 +372,17 @@ function viewTeach(l, stage) {
       else maybeAssist();
     } catch (e) {
       if (!ctx.alive) return;
-      for (const id of ids) { waits[id].remove(); setThinking(id, false); }
+      for (const id of ids) { waits[id]?.remove(); setThinking(id, false); }
       const d = document.createElement("div"); d.className = "sys";
       d.innerHTML = `${esc(e.message)}<br><button class="link" id="chk">Check the AI model</button>`; feed.appendChild(d); scrollDown();
       d.querySelector("#chk").onclick = openPop; say.value = text; autosize();
     }
-    busy = false; if (ctx.alive) { for (const id of ids) setThinking(id, false); resetHint(); autosize(); say.focus(); }
+    busy = false;
+    if (ctx.alive) {
+      for (const id of ids) setThinking(id, false); autosize();
+      if (handsFree) { hint("Students are talking…"); const g = speakGen; speakQueue.then(() => { if (ctx.alive && handsFree && !busy && g === speakGen) startListening(); }); }
+      else { resetHint(); say.focus(); }
+    }
   }
   say.oninput = autosize;
   say.onkeydown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } };
@@ -374,21 +391,44 @@ function viewTeach(l, stage) {
   $("mine").onclick = () => ed.set(store.get(`tb-code-${lid}-workshop`, store.get(`tb-code-${lid}-practice`, l.example)));
   $("fresh").onclick = () => { store.set(`tb-round-${lid}`, round + 1); route(); };
 
-  // voice in: tap to start, tap again to stop and send
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition; let rec = null, recording = false, sendAfter = false, base = "";
+  // voice in. Tap the mic to talk and tap again to send, or switch on hands-free: talk naturally, answers come when you pause.
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition; let rec = null, recording = false, sendAfter = false, base = "", handsFree = false, silenceTimer = null;
   const micUI = () => { $("mic").classList.toggle("rec", recording); $("mic").innerHTML = recording ? ICON.stop : ICON.mic; $("send").classList.toggle("hidden", recording); };
+  function startListening() {
+    if (!SR || busy || recording || !ctx.alive) return;
+    stopSpeaking(); base = say.value.trim() ? say.value.trim() + " " : "";
+    try { rec.start(); recording = true; micUI(); hint(handsFree ? "Listening… just talk. They'll answer when you pause." : "Listening… tap again to send", true); } catch {}
+  }
   if (SR) {
     rec = new SR(); rec.continuous = true; rec.interimResults = true; rec.lang = "en-US";
-    rec.onresult = (e) => { say.value = base + Array.from(e.results).map((r) => r[0].transcript).join(" "); autosize(); };
-    rec.onerror = (e) => { sendAfter = false; recording = false; micUI(); hint(e.error === "not-allowed" || e.error === "service-not-allowed" ? "The microphone is blocked. Allow it in the address bar, or type instead." : e.error === "no-speech" ? "Didn't hear anything. Tap the mic and try again." : "Voice stopped (" + e.error + "). You can type instead."); };
-    rec.onend = () => { recording = false; micUI(); if (sendAfter) { sendAfter = false; send(); } else if (!$("hint").textContent.startsWith("The mic") && $("hint").className.includes("live")) resetHint(); };
+    rec.onresult = (e) => {
+      say.value = base + Array.from(e.results).map((r) => r[0].transcript).join(" "); autosize();
+      if (handsFree) { clearTimeout(silenceTimer); silenceTimer = setTimeout(() => { if (recording && say.value.trim().split(/\s+/).length >= 2) { sendAfter = true; hint("Got it…"); rec.stop(); } }, 1700); }
+    };
+    rec.onerror = (e) => {
+      sendAfter = false; recording = false; micUI();
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") { handsFree = false; $("hf").textContent = "Hands-free: off"; hint("The microphone is blocked. Allow it in the address bar, or type instead."); }
+      else if (e.error === "no-speech") { if (!handsFree) hint("Didn't hear anything. Tap the mic and try again."); }
+      else if (e.error === "network") { handsFree = false; $("hf").textContent = "Hands-free: off"; hint("Browser voice recognition needs internet (it's cloud based). You can type instead."); }
+      else if (e.error !== "aborted") hint("Voice stopped (" + e.error + "). You can type instead.");
+    };
+    rec.onend = () => {
+      recording = false; micUI(); clearTimeout(silenceTimer);
+      if (sendAfter) { sendAfter = false; send(); }
+      else if (handsFree && !busy && ctx.alive) setTimeout(startListening, 250); // Chrome ends sessions on silence; keep the line open
+      else if ($("hint").className.includes("live")) resetHint();
+    };
   }
   $("mic").onclick = () => {
     if (!SR) return hint("Voice input works in Chrome, Edge or Safari. You can type instead.");
     if (busy) return;
     if (recording) { sendAfter = true; hint("Sending…"); rec.stop(); return; }
-    stopSpeaking(); base = say.value.trim() ? say.value.trim() + " " : "";
-    try { rec.start(); recording = true; micUI(); hint("Listening… tap again to send", true); } catch {}
+    startListening();
+  };
+  $("hf").onclick = () => {
+    if (!SR) return hint("Hands-free needs Chrome, Edge or Safari. You can type instead.");
+    handsFree = !handsFree; $("hf").textContent = "Hands-free: " + (handsFree ? "on" : "off"); $("hf").classList.toggle("on", handsFree);
+    if (handsFree) startListening(); else { clearTimeout(silenceTimer); sendAfter = false; try { rec.abort(); } catch {} resetHint(); }
   };
   autosize(); say.focus({ preventScroll: true });
 }

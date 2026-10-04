@@ -12,7 +12,7 @@ const fake = createServer(async (req, res) => {
 }).listen(0);
 await new Promise((r) => fake.once("listening", r));
 process.env.LLM_BASE_URL = `http://localhost:${(fake.address() as any).port}/v1`;
-const { classroomTurn, verifyCoverage, tryParseReply } = await import("./classroom.js");
+const { classroomTurn, verifyCoverage, tryParseReply, chooseSpeakers } = await import("./classroom.js");
 const fail = (m: string) => { console.error("FAIL: " + m); process.exit(1); };
 
 const replies = await classroomTurn({ topic: "t", code: "print(1)", history: [], utterance: "it prints one" });
@@ -30,8 +30,17 @@ const cases: [string, string, string[]][] = [
   ["covered=false ignored", raw([{ id: "a", covered: false, quote: "a name that I stick on a value" }]), []],
   ["unknown id ignored", raw([{ id: "zzz", covered: true, quote: "a name that I stick on a value" }]), []],
   ["garbage -> nothing", "I think they did great!", []],
+  ["close paraphrase accepted", raw([{ id: "a", covered: true, quote: "a variable is a name stuck on a value" }]), ["a"]],
+  ["jumbled words rejected", raw([{ id: "a", covered: true, quote: "value stick name variable label" }]), []],
 ];
 for (const [name, r, want] of cases) { const got = verifyCoverage(r, rubric, said); if (JSON.stringify(got) !== JSON.stringify(want)) fail(`${name}: got ${JSON.stringify(got)}`); }
 console.log(`verifyCoverage OK (${cases.length} cases)`);
 if (tryParseReply("no json here") !== null || !tryParseReply('x {"question":"why?","understanding":4} y')) fail("tryParseReply");
-console.log("tryParseReply OK"); fake.close(); process.exit(0);
+console.log("tryParseReply OK");
+const eq = (a: unknown, b: unknown, m: string) => { if (JSON.stringify(a) !== JSON.stringify(b)) fail(`${m}: got ${JSON.stringify(a)}`); };
+eq(chooseSpeakers("A variable is a function parameter and an operator.", undefined, 1), ["zee"], "jargon, no analogy -> Zee");
+eq(chooseSpeakers("It always works and never fails.", undefined, 1), ["kofi"], "absolute claims -> Kofi");
+eq(chooseSpeakers("It is like a label on a box.", undefined, 1), ["maya"], "default -> Maya");
+eq(chooseSpeakers("It is like a label on a box.", "maya", 1), ["kofi"], "last speaker is rotated out");
+eq(chooseSpeakers("hi", undefined, 3).length, 3, "n=3 returns everyone");
+console.log("chooseSpeakers OK"); fake.close(); process.exit(0);
