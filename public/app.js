@@ -80,8 +80,9 @@ async function openPop() {
   if (cfg.hosted) { pop.innerHTML = `<h4>AI model</h4><p><b>${esc(cfg.model)}</b> is set by the host of this site.</p>${priv}`; return; }
   pop.innerHTML = `<h4>AI model</h4>${rows || `<p>${d.unreachable ? "Can't reach Ollama. Open the Ollama app, then try again." : "No models installed yet. In a terminal run <code>ollama pull gemma3:4b</code>."}</p>`}
     ${d.installed.some((m) => /gemma/i.test(m.name)) ? "" : `<p>Tip: a local Gemma model keeps the students on this device.</p>`}${priv}`;
-  pop.insertAdjacentHTML("beforeend", `<div class="priv"><h4>Not working?</h4><p><button class="btn sm soft" id="selftest">Test the students</button></p><div id="testout"></div></div>`);
+  pop.insertAdjacentHTML("beforeend", `<div class="priv"><h4>Not working?</h4><p><button class="btn sm soft" id="selftest">Test the students</button> <button class="btn sm soft" id="mictest">Test the microphone</button></p><div id="testout"></div></div>`);
   $("selftest").onclick = () => runSelfTest($("testout"));
+  $("mictest").onclick = () => runMicTest($("testout"));
   pop.querySelectorAll(".opt").forEach((b) => (b.onclick = async () => {
     await fetch("/api/model", { method: "POST", body: JSON.stringify({ model: b.dataset.m }) });
     store.set("tb-model", b.dataset.m); pop.classList.add("hidden"); await loadConfig(); startPoll();
@@ -291,6 +292,31 @@ async function* readLines(stream) {
   if (buf.trim()) yield buf.trim();
 }
 
+/* ================= microphone help + test ================= */
+const MIC_HELP = {
+  "not-allowed": "The browser blocked the microphone. Click the lock/microphone icon in the address bar and choose Allow.",
+  "service-not-allowed": "Voice recognition is turned off or blocked here. In Windows: Settings > Privacy & security > Speech > Online speech recognition. Or try Chrome.",
+  network: "Browser voice recognition needs an internet connection to its cloud service, and it couldn't reach it. Type instead, or try Chrome on a different network.",
+  "audio-capture": "No microphone was found, or another app is using it. Plug one in or close other apps that use the mic.",
+  "no-speech": "It didn't hear any speech.",
+};
+async function runMicTest(into) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { into.innerHTML = `<p>✗ This browser has no voice recognition. Use Chrome, Edge or Safari, or type instead.</p>`; return; }
+  into.innerHTML = `<p><b>Say something now</b>, for example "testing one two three". Listening for 8 seconds…</p><div class="row2"><span id="mt" style="color:var(--ink)">…</span></div>`;
+  const out = $("mt"), r = new SR(); let started = false, sound = false, text = "", err = "";
+  r.continuous = true; r.interimResults = true; r.lang = "en-US";
+  r.onstart = () => (started = true); r.onspeechstart = () => (sound = true);
+  r.onresult = (e) => { text = Array.from(e.results).map((x) => x[0].transcript).join(" "); out.textContent = "“" + text + "”"; };
+  r.onerror = (e) => (err = e.error);
+  const done = new Promise((ok) => (r.onend = ok)); setTimeout(() => { try { r.stop(); } catch {} }, 8000);
+  try { r.start(); } catch (e) { err = e.message; }
+  await done;
+  const verdict = text ? `✓ It heard you: “${esc(text)}”. Voice input works.` : err && err !== "no-speech" ? `✗ ${esc(MIC_HELP[err] ?? "Error: " + err)}` : started && sound ? "✗ It detected sound but couldn't turn it into words. Speak clearly and closer to the mic." : started ? "✗ The mic opened but heard nothing. Check that the right microphone is selected in Windows sound settings and not muted." : "✗ The microphone didn't start.";
+  into.innerHTML = `<h4>Microphone test</h4><div class="row2"><span style="color:var(--ink)">${verdict}</span></div><p><button class="link" id="mtagain">Test again</button></p>`;
+  $("mtagain").onclick = () => runMicTest(into);
+}
+
 /* ================= classroom ================= */
 function viewTeach(l, stage) {
   const lid = l.id, round = store.get(`tb-round-${lid}`, 0), sid = `${baseSession}:${lid}:${round}`, ids = Object.keys(cfg.students);
@@ -412,10 +438,11 @@ function viewTeach(l, stage) {
   // voice in. Tap the mic to talk and tap again to send, or switch on hands-free: talk naturally, answers come when you pause.
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition; let rec = null, recording = false, sendAfter = false, base = "", handsFree = false, silenceTimer = null;
   const micUI = () => { $("mic").classList.toggle("rec", recording); $("mic").innerHTML = recording ? ICON.stop : ICON.mic; $("send").classList.toggle("hidden", recording); };
+  let endReason = "", startedAt = 0;
   function startListening() {
     if (!SR || busy || recording || !ctx.alive) return;
-    stopSpeaking(); base = say.value.trim() ? say.value.trim() + " " : "";
-    try { rec.start(); recording = true; micUI(); hint(handsFree ? "Listening… just talk. They'll answer when you pause." : "Listening… tap again to send", true); } catch {}
+    stopSpeaking(); base = say.value.trim() ? say.value.trim() + " " : ""; endReason = ""; startedAt = Date.now();
+    try { rec.start(); recording = true; micUI(); hint(handsFree ? "Listening… just talk. They'll answer when you pause." : "Listening… talk, then pause (or tap the mic to send)", true); } catch (e) { hint("Couldn't start the microphone: " + e.message); }
   }
   if (SR) {
     rec = new SR(); rec.continuous = true; rec.interimResults = true; rec.lang = "en-US";
@@ -424,22 +451,23 @@ function viewTeach(l, stage) {
       if (handsFree) { clearTimeout(silenceTimer); silenceTimer = setTimeout(() => { if (recording && say.value.trim().split(/\s+/).length >= 2) { sendAfter = true; hint("Got it…"); rec.stop(); } }, 1700); }
     };
     rec.onerror = (e) => {
-      sendAfter = false; recording = false; micUI();
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") { handsFree = false; $("hf").textContent = "Hands-free: off"; hint("The microphone is blocked. Allow it in the address bar, or type instead."); }
-      else if (e.error === "no-speech") { if (!handsFree) hint("Didn't hear anything. Tap the mic and try again."); }
-      else if (e.error === "network") { handsFree = false; $("hf").textContent = "Hands-free: off"; hint("Browser voice recognition needs internet (it's cloud based). You can type instead."); }
-      else if (e.error !== "aborted") hint("Voice stopped (" + e.error + "). You can type instead.");
+      endReason = e.error; sendAfter = false; recording = false; micUI();
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") { handsFree = false; $("hf").textContent = "Hands-free: off"; hint(MIC_HELP[e.error]); }
+      else if (e.error === "network") { handsFree = false; $("hf").textContent = "Hands-free: off"; hint(MIC_HELP.network); }
+      else if (e.error !== "aborted" && e.error !== "no-speech") hint((MIC_HELP[e.error] ?? "Voice stopped (" + e.error + ").") + " You can type instead.");
     };
     rec.onend = () => {
       recording = false; micUI(); clearTimeout(silenceTimer);
-      if (sendAfter) { sendAfter = false; send(); }
-      else if (handsFree && !busy && ctx.alive) setTimeout(startListening, 250); // Chrome ends sessions on silence; keep the line open
-      else if ($("hint").className.includes("live")) resetHint();
+      if (sendAfter) { sendAfter = false; send(); return; }
+      if (handsFree && !busy && ctx.alive && (!endReason || endReason === "no-speech")) { setTimeout(startListening, 250); return; } // Chrome ends sessions on silence; keep the line open
+      const words = say.value.trim().split(/\s+/).filter(Boolean).length, secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+      if (!endReason && words >= 2 && !busy) { hint("Heard you. Sending…"); send(); return; } // the browser ended the session after a pause: send what it heard
+      if (!endReason || endReason === "no-speech") hint(`I didn't hear anything (the mic was open ${secs}s). Check the microphone icon in the address bar, or open the model menu and press "Test the microphone".`);
     };
   }
   $("mic").onclick = () => {
     if (!SR) return hint("Voice input works in Chrome, Edge or Safari. You can type instead.");
-    if (busy) return;
+    if (busy) return hint("The students are still thinking. One moment…");
     if (recording) { sendAfter = true; hint("Sending…"); rec.stop(); return; }
     startListening();
   };
