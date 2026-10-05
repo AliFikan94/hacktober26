@@ -3,7 +3,7 @@
 *Built for a friend learning Python after long days at an electricity distribution company.*
 
 ## The friend
-My friend Jacob works 9 to 5 at an electricity distribution company. He wants to learn Python, but he's stuck in tutorial hell: hours of videos, projects nobody uses, and no way to know whether he really understands what's happening under the hood. After work he's too tired to type, and our schedules never line up for study sessions.
+My friend works 9 to 5 at an electricity distribution company. He wants to learn Python, but he's stuck in tutorial hell: hours of videos, projects nobody uses, and no way to know whether he really understands what's happening under the hood. After work he's too tired to type, and our schedules never line up for study sessions.
 
 ## The idea
 I applied to teach on Stanford's Code in Place, and the application had me teach a simulated class of three virtual students who watch your shared screen, listen, and ask questions. It hit me that the fastest way to find out whether you understand something is to explain it to someone else. Most learning platforms go **Theory → Practice → Workshop**. I wanted to add a fourth step: **Teach**.
@@ -26,10 +26,10 @@ I'm submitting this incomplete, and I'd rather say so.
 - **My own PC was too small.** A 4B Gemma model needs about 4 GB of free memory and I had about 2.5. So I built the app to measure free memory and choose a model that fits, or fall back to a cloud model and say so.
 - **Small models don't follow formats.** A tiny model often answers in plain sentences instead of the structure the examiner needs. I added a labelled keyword-check fallback for those cases.
 - **Voice is fragile.** The browser's built-in speech recognition ends sessions on its own, needs the internet, and fails in different ways on different browsers. I added a microphone test and plain-English explanations of each failure.
-- **I could not get the Teach conversation working end to end on my PC before the deadline**, and I haven't found the cause. It is tested against simulated models and automated browser tests, but I can't claim it works with a real Gemma on my machine. I also never got Jacob to test it, so I have no quote from him to share.
+- **I could not get the Teach conversation working end to end on my PC before the deadline**, and I haven't found the cause. It is tested against simulated models and automated browser tests, but I can't claim it works with a real Gemma on my machine. I also never got my friend to test it, so I have no quote from him to share.
 
 ## What I learned
-Building for one real person on real hardware humbled the design. The hardest part of "open-source AI" wasn't the AI; it was fitting it onto the computer he actually has. If I continue, the first steps are a hosted option for people with small laptops and a real session with Jacob.
+Building for one real person on real hardware humbled the design. The hardest part of "open-source AI" wasn't the AI; it was fitting it onto the computer he actually has. If I continue, the first steps are a hosted option for people with small laptops and a real session with my friend.
 
 ## Code
 https://github.com/AliFikan94/hacktober26/tree/claude/hacktoberfest-weekend-challenge-jsoemc
