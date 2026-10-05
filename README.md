@@ -1,5 +1,8 @@
 # 🎓 TeachBack
 
+> **Honest status (hackathon submission).** TeachBack's lessons, in-browser Python runner, capstone, certificate, model picker, privacy panel and the Teach logic (students, examiner, voice loop) are implemented and covered by automated tests and browser tests against *simulated* model servers. On the author's low-memory PC (about 2.5 GB free RAM) the Teach conversation was **not** verified end to end with a real local Gemma before the deadline, and its cause was not pinned down. The in-app **Test the students** and **Test the microphone** buttons (model menu, top right) and `npm run doctor` exist to diagnose exactly that. It has not been tested by the friend it was built for.
+
+
 **Theory → Practice → Workshop → _Teach_.**
 A learn-and-teach platform built for a friend who works 9–5 at an electricity distribution company, wants to learn Python, and is too tired to type after work.
 
