@@ -21,7 +21,7 @@ Most platforms go **Theory → Practice → Workshop.** TeachBack adds a fourth 
 - Practice and workshop exercises that run Python right in the browser.
 - **Teach:** he explains the code out loud to three students: Maya (always asks *why*), Kofi (always asks *what breaks*, using meter data), and Zee (needs it in plain words). They see his code and what the terminal printed. One chimes in at a time.
 - A separate examiner checks whether he explained each key idea correctly **in his own words**. It must point to his actual words as evidence; the server rejects evidence he never said.
-- A certificate and share cards at milestones. [Only keep this if you tested it]
+- A capstone: his final project is to **design his own certificate in Python**, with guidance, then teach it back. The app then shows the certificate he built. [Only keep this if you tested it]
 
 [SCREENSHOT or SHORT SCREEN RECORDING of a real Teach session. Required.]
 

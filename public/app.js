@@ -165,18 +165,9 @@ function viewTheory(l, stage, next) {
     <div class="code-card"><div class="code-head"><span>example.py</span><span class="acts"><button class="chipbtn go" id="tryit">${ICON.play} Try it</button></span></div><pre class="ex">${esc(l.example)}</pre></div>
     <h3 class="sec">Go deeper</h3>
     <div class="list">${l.links.map((k) => `<a class="item" href="${esc(k.url)}" target="_blank" rel="noopener"><span class="t">${esc(k.title)}</span>${ICON.chev}</a>`).join("")}</div>
-    <form class="search" id="sf"><input id="q" value="${esc(l.search)}" aria-label="Search the web"><button class="btn soft" type="submit">Search</button></form>
-    <div id="hits"></div><p class="note">Web search by DuckDuckGo. Nothing is tracked.</p>
     <div class="foot"><button class="btn" id="next">Continue to Practice</button></div>`;
   $("next").onclick = () => next("theory");
   $("tryit").onclick = () => { store.set(`tb-code-${l.id}-practice`, l.example); markDone(l.id, "theory"); go(`#/lesson/${l.id}/practice`); };
-  $("sf").onsubmit = async (e) => {
-    e.preventDefault(); $("hits").innerHTML = `<p class="note">Searching…</p>`;
-    try {
-      const r = await fetch("/api/search?q=" + encodeURIComponent($("q").value)); const d = await r.json(); if (!r.ok) throw new Error(d.error);
-      $("hits").innerHTML = d.hits.length ? `<div class="list">${d.hits.map((h) => `<a class="item" href="${esc(h.url)}" target="_blank" rel="noopener"><span style="flex:1;min-width:0"><div class="t">${esc(h.title)}</div><div class="s">${esc(h.snippet)}</div></span>${ICON.chev}</a>`).join("")}</div>` : `<p class="note">No results. Try different words.</p>`;
-    } catch (err) { $("hits").innerHTML = `<p class="note">${esc(err.message)} The links above still work.</p>`; }
-  };
 }
 
 /* ================= code editor ================= */
@@ -254,7 +245,7 @@ function viewEditor(l, kind, stage, next) {
         const lines = error.split("\n"); body().textContent = (out ? out : "") + lines.slice(-3).join("\n");
         const hit = HELP.find(([re]) => re.test(error)), at = error.match(/line (\d+)/);
         $("help").innerHTML = `<div class="friendly"><b>What this means</b>${hit ? hit[1](error.match(hit[0])) : "Python stopped with an error. Read the last line above for the clue."}${at ? ` Look near line ${at[1]}.` : ""}</div>`;
-      } else { body().className = "body"; if (out) body().textContent = out; else { body().className = "body muted"; body().textContent = "Ran fine. Nothing was printed, so add a print() to see a result."; } }
+      } else { if (l.id === "capstone" && kind === "workshop" && out) store.set("tb-capstone-out", out); body().className = "body"; if (out) body().textContent = out; else { body().className = "body muted"; body().textContent = "Ran fine. Nothing was printed, so add a print() to see a result."; } }
     } catch (e) { con.classList.add("err"); body().className = "body"; body().textContent = e.message; }
     running = false; $("run").disabled = false;
   }
@@ -526,7 +517,7 @@ function certSVG(name, iso) {
     <text x="600" y="480" text-anchor="middle" font-family="${SERIF}" font-size="${nsz}" font-style="italic" font-weight="500" fill="#1d1d1f" letter-spacing="-1">${esc(nm)}</text>
     <line x1="300" y1="508" x2="900" y2="508" stroke="#1d1d1f" stroke-opacity=".3"/>
     <text x="600" y="565" text-anchor="middle" font-family="${SERIF}" font-size="26" fill="#1d1d1f">completed <tspan font-weight="700">${esc(course.title)}</tspan></text>
-    <text x="600" y="606" text-anchor="middle" font-family="${SERIF}" font-size="22" fill="#6e6e73">${lessons.length} lessons, each taught back out loud to three AI students</text>
+    <text x="600" y="606" text-anchor="middle" font-family="${SERIF}" font-size="22" fill="#6e6e73">${lessons.length} lessons taught back out loud to three AI students, plus a capstone: a certificate designed in Python</text>
     <text x="600" y="640" text-anchor="middle" font-family="${SERIF}" font-size="22" fill="#6e6e73">${st.turns} explanations given · ${lessons.filter((x) => !store.get("tb-assisted", {})[x.id] && !store.get("tb-keyword", {})[x.id]).length} of ${lessons.length} lessons verified by the AI examiner</text>
     <text x="150" y="738" font-family="${SANS}" font-size="16" fill="#6e6e73" letter-spacing="1">DATE</text><text x="150" y="766" font-family="${SERIF}" font-size="24" fill="#1d1d1f">${esc(fmtDate(iso))}</text>
     <text x="1050" y="738" text-anchor="end" font-family="${SANS}" font-size="16" fill="#6e6e73" letter-spacing="1">CERTIFICATE ID</text><text x="1050" y="766" text-anchor="end" font-family="${SANS}" font-size="22" font-weight="600" fill="#1d1d1f" letter-spacing="1">${certId(nm, iso)}</text>
@@ -540,30 +531,6 @@ async function svgToPng(str, w, h) {
 }
 function saveBlob(blob, name) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
 
-/* ================= sharing ================= */
-const shareUrl = () => cfg.shareUrl || location.origin;
-function shareButtons(text, svgStr, w, h, file) {
-  const u = encodeURIComponent(shareUrl()), t = encodeURIComponent(text);
-  const links = [["X", `https://twitter.com/intent/tweet?text=${t}&url=${u}`], ["LinkedIn", `https://www.linkedin.com/sharing/share-offsite/?url=${u}`], ["WhatsApp", `https://wa.me/?text=${encodeURIComponent(text + " " + shareUrl())}`]];
-  return `<div class="sharerow">${navigator.share ? `<button class="btn" data-a="native">Share…</button>` : ""}
-    ${links.map(([n, h2]) => `<a class="btn soft" href="${h2}" target="_blank" rel="noopener">${n}</a>`).join("")}
-    <button class="btn soft" data-a="copy">Copy text</button><button class="btn soft" data-a="img">Save image</button></div>`;
-}
-function wireShare(root, text, svgStr, w, h, file) {
-  root.querySelectorAll("[data-a]").forEach((b) => (b.onclick = async () => {
-    const a = b.dataset.a, orig = b.textContent;
-    try {
-      if (a === "img") saveBlob(await svgToPng(svgStr, w, h), file);
-      else if (a === "copy") { await navigator.clipboard.writeText(text + " " + shareUrl()); b.textContent = "Copied ✓"; setTimeout(() => (b.textContent = orig), 1500); }
-      else if (a === "native") {
-        const png = await svgToPng(svgStr, w, h), f = new File([png], file, { type: "image/png" });
-        const data = { text, url: shareUrl(), title: "TeachBack" }; if (navigator.canShare?.({ files: [f] })) data.files = [f];
-        await navigator.share(data);
-      }
-    } catch (e) { if (e?.name !== "AbortError") { b.textContent = "Couldn't. Try Save image"; setTimeout(() => (b.textContent = orig), 2200); } }
-  }));
-}
-
 /* ================= milestones ================= */
 function checkMilestones(lid, phase) {
   const l = lessons.find((x) => x.id === lid), m = course.modules.find((x) => x.lessons.includes(l)), seen = store.get("tb-milestones", {}), found = [];
@@ -575,11 +542,10 @@ function checkMilestones(lid, phase) {
   const top = found[found.length - 1]; setTimeout(() => showMilestone(top), phase === "teach" ? 1600 : 400);
 }
 function showMilestone(m) {
-  const svgStr = cardSVG(m), text = m.sub + " #Hacktoberfest #OpenSource", modal = $("modal");
+  const svgStr = cardSVG(m), modal = $("modal");
   modal.classList.remove("hidden");
-  modal.innerHTML = `<div class="sheet"><div class="card">${svgStr}</div><h2>${esc(m.title)}</h2><p>${esc(m.line)} Share it with someone who'd love to learn too.</p>
-    ${shareButtons(text)}<div class="acts"><button class="link" id="later">Maybe later</button>${m.kind === "course" ? `<button class="btn" id="getcert">View certificate</button>` : `<button class="btn" id="keep">Keep going</button>`}</div></div>`;
-  wireShare(modal, text, svgStr, 1200, 630, `teachback-${m.kind}.png`);
+  modal.innerHTML = `<div class="sheet"><div class="card">${svgStr}</div><h2>${esc(m.title)}</h2><p>${esc(m.line)}</p>
+    <div class="acts"><button class="link" id="later">Close</button>${m.kind === "course" ? `<button class="btn" id="getcert">View certificate</button>` : `<button class="btn" id="keep">Keep going</button>`}</div></div>`;
   const close = () => { modal.classList.add("hidden"); modal.innerHTML = ""; };
   modal.onclick = (e) => e.target === modal && close(); $("later").onclick = close;
   if ($("keep")) $("keep").onclick = close; if ($("getcert")) $("getcert").onclick = () => { close(); go("#/certificate"); };
@@ -598,13 +564,13 @@ function certificatePage() {
   const iso = store.get("tb-completed", "") || (store.set("tb-completed", new Date().toISOString()), store.get("tb-completed", ""));
   $("view").innerHTML = `<div class="page wide" style="max-width:1000px"><p class="eyebrow noprint">Certificate</p><h1 class="display noprint">You did it${getName() ? ", " + esc(getName().split(" ")[0]) : ""}.</h1>
     <div class="certbar noprint"><input id="nm" value="${esc(getName())}" placeholder="Your name as it should appear" maxlength="40" aria-label="Name on certificate"></div>
+    ${store.get("tb-capstone-out", "") ? `<h3 class="sec noprint">Designed by you, in Python</h3><div class="code-card noprint" style="margin-bottom:28px"><div class="code-head"><span>make_certificate.py · your capstone</span></div><pre class="ex" style="white-space:pre;overflow:auto">${esc(store.get("tb-capstone-out", ""))}</pre></div><h3 class="sec noprint">And the keepsake</h3>` : ""}
     <div class="certwrap" id="cert"></div>
     <div class="certbar noprint"><button class="btn" id="dl">Download image</button><button class="btn soft" id="pr">Save as PDF / Print</button></div>
-    <div class="noprint" id="sh"></div></div>`;
+    </div>`;
   const draw = () => {
-    const name = getName(), svgStr = certSVG(name, iso), text = `I completed ${course.title} on TeachBack and taught every lesson back to three AI students. #Hacktoberfest #OpenSource`;
-    $("cert").innerHTML = svgStr; $("sh").innerHTML = shareButtons(text);
-    wireShare($("sh"), text, svgStr, 1200, 850, "teachback-certificate.png");
+    const name = getName(), svgStr = certSVG(name, iso);
+    $("cert").innerHTML = svgStr;
     $("dl").onclick = async () => saveBlob(await svgToPng(svgStr, 2400, 1700), "teachback-certificate.png");
   };
   $("pr").onclick = () => print();

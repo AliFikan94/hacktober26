@@ -48,4 +48,7 @@ const cur = JSON.parse((await import("node:fs")).readFileSync("curriculum/python
 eq(keywordCoverage(vr, "A variable is a name for a value. int float and str are types, bool too."), ["name", "types"], "keywords: good explanation");
 eq(keywordCoverage(vr, "It's just a thing. You write it and it works."), [], "keywords: vague answer gets nothing");
 if (cur.modules.flatMap((m: any) => m.lessons).some((l: any) => l.rubric.some((r: any) => !r.keywords))) fail("every rubric point needs keywords");
+const cap = cur.modules.flatMap((m: any) => m.lessons).find((l: any) => l.id === "capstone");
+if (!cap || cap.rubric.length !== 3) fail("capstone lesson missing");
+eq(keywordCoverage(cap.rubric, "My function takes parameters so I can reuse it for any name. I build the text with f-strings, multiply the equals sign for the border and centre the title. I added a loop of stars because I wanted it to look mine."), ["params", "text", "design"], "capstone keywords");
 console.log("keywordCoverage OK"); fake.close(); process.exit(0);

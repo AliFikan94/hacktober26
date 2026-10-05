@@ -3,7 +3,7 @@
 **Theory → Practice → Workshop → _Teach_.**
 A learn-and-teach platform built for a friend who works 9–5 at an electricity distribution company, wants to learn Python, and is too tired to type after work.
 
-Each lesson has four phases: 📖 **Theory** (short, grid-themed explanation plus curated and DuckDuckGo-searched resources), ✏️ **Practice** and 🛠️ **Workshop** (run Python right in the browser via Pyodide), then 🎓 **Teach**. Instead of another tutorial, he *teaches* three AI students out loud while sharing his code:
+Each lesson has four phases: 📖 **Theory** (short, grid-themed explanation plus curated Python docs links), ✏️ **Practice** and 🛠️ **Workshop** (run Python right in the browser via Pyodide), then 🎓 **Teach**. Instead of another tutorial, he *teaches* three AI students out loud while sharing his code:
 
 | Student | Asks | 
 |---|---|
@@ -36,7 +36,6 @@ Use Chrome/Edge/Safari for the hold-to-talk mic. Click "Teach →" or release th
 | `MONGODB_URI` | Persist sessions in MongoDB Atlas (default: local `data/sessions.json`) |
 | `EXAMINER_MODEL` | Optional separate model for judging explanations |
 | `HOSTED=1` | Public deployment mode: model switching off, rate limits on (see `render.yaml`, untested) |
-| `SHARE_URL` | Link included when sharing milestones (default: this repo) |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_MAYA/KOFI/ZEE` | ElevenLabs voices (default: browser voices) |
 
 ## Experience
@@ -73,7 +72,6 @@ Each lesson has 3 key ideas (`rubric` in `curriculum/python.json`). A separate *
 | AI students + examiner | Your device if you use a local model (e.g. `gemma3:4b`). `:cloud` models and hosted deployments run on a server. |
 | Voice input | Browser speech recognition: Chrome/Edge send audio to Google/Microsoft. Typing keeps it local. |
 | Python runner | In your browser (Pyodide), but downloaded from a CDN on first use. |
-| Web search | DuckDuckGo (needs internet). |
 | Progress | Only in your browser. |
 
 ## Check your setup
@@ -81,22 +79,20 @@ Each lesson has 3 key ideas (`rubric` in `curriculum/python.json`). A separate *
 
 ## Progress, certificate and sharing
 - **Progress** lives on the home page (steps, streak, explanations) and in each lesson's four tabs. No sidebar, on purpose.
-- **Milestones:** finishing a lesson, a module, or the course opens a celebration card with a ready-to-post 1200x630 image and share buttons (native share sheet, X, LinkedIn, WhatsApp, copy text, save image).
-- **Certificate:** unlocks at 28/28 steps, uses the learner's name, has a unique ID, and exports as PNG or PDF (print). It is a self-paced completion certificate, not an accredited qualification. Shares link to `SHARE_URL` (default: this repo).
+- **Milestones:** finishing a lesson, a module, or the course opens a simple celebration card.
+- **Capstone and certificate:** the last lesson has the learner design their own certificate in Python (guided), then teach it back. When everything is done, the app shows their Python-built certificate and a keepsake version (image or PDF) with their name and a unique ID. It is a self-paced completion certificate, not an accredited qualification.
 - Everything is stored in the browser (localStorage); no accounts, no tracking.
 
 ## Syllabus
-`curriculum/python.json`: 3 modules, 7 lessons (variables, numbers, conditionals, functions, loops/lists, dicts, error handling), all using electricity-distribution examples. Add a lesson by adding an object; no code changes needed. Progress is stored in the browser. A lesson's Teach step completes automatically when all three students score 7+/10.
+`curriculum/python.json`: 4 modules, 8 lessons (variables, numbers, conditionals, functions, loops/lists, dicts, error handling, and a capstone), all using electricity-distribution examples. Add a lesson by adding an object; no code changes needed. Progress is stored in the browser. A lesson's Teach step completes automatically when all three students score 7+/10.
 
 ## Notes
-- **Web search** uses DuckDuckGo's HTML endpoint (no API key). It's scraping, so it can break or be rate-limited; curated links always show too.
 - **Python runner** loads Pyodide from a CDN on first Run (needs internet once).
 
 ## Layout
 - `src/students.ts`: the three Mastra agents and personalities
 - `src/classroom.ts`: parallel fan-out of one teaching turn
 - `src/store.ts`: session memory (Mongo or file)
-- `src/search.ts`: DuckDuckGo search
 - `curriculum/python.json`: the syllabus
 - `src/server.ts`, `public/index.html`: server and voice-first UI
 

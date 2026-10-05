@@ -203,8 +203,6 @@ pre.ex { margin:0; padding:16px 20px; font:400 14px/22px var(--mono); white-spac
 .sheet { width:min(560px,100%); background:var(--raised); border-radius:28px; padding:18px; box-shadow:0 30px 80px -20px rgba(0,0,0,.5); animation:pop .45s var(--ease) both; }
 .sheet .card { border-radius:18px; overflow:hidden; line-height:0; } .sheet .card svg { width:100%; height:auto; }
 .sheet h2 { font:600 1.6rem/1.15 var(--serif); letter-spacing:-.02em; margin:18px 6px 4px; } .sheet p { margin:0 6px 14px; color:var(--mute); }
-.sharerow { display:flex; flex-wrap:wrap; gap:8px; margin:0 6px 14px; }
-.sharerow .btn { padding:9px 15px; font-size:.88rem; }
 .sheet .acts { display:flex; gap:10px; justify-content:space-between; align-items:center; margin:0 6px 4px; flex-wrap:wrap; }
 @keyframes fade { from { opacity:0; } } @keyframes pop { from { opacity:0; transform:translateY(24px) scale(.96); } }
 

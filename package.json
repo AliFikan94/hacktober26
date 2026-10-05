@@ -7,7 +7,7 @@
   "scripts": {
     "start": "tsx src/server.ts",
     "check": "tsc --noEmit",
-    "test": "tsx src/smoke.ts && tsx src/search.test.ts && tsx src/models.test.ts",
+    "test": "tsx src/smoke.ts && tsx src/models.test.ts",
     "doctor": "tsx src/doctor.ts"
   },
   "license": "MIT",

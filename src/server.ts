@@ -4,7 +4,6 @@ import { extname, join, normalize } from "node:path";
 import { classroomTurn, examineTurn, chooseSpeakers, generateJson, tryParseReply, studentPrompt, type RubricPoint } from "./classroom.js";
 import { MODEL, STUDENTS, agents, setModel, type StudentId } from "./students.js";
 import { loadSession, saveTurn } from "./store.js";
-import { ddgSearch } from "./search.js";
 import { OLLAMA, installedModels, autoSelect, isCloudName, names, friendlyModelError } from "./models.js";
 
 console.log("Starting TeachBack…");
@@ -64,7 +63,7 @@ createServer(async (req, res) => {
       return res.end(await readFile(join("public", rel)));
     }
     if (req.method === "GET" && url.pathname === "/api/config") {
-      return send(res, 200, { model: MODEL, ready, modelError, students: STUDENTS, elevenlabs: !!process.env.ELEVENLABS_API_KEY, hosted: HOSTED, shareUrl: process.env.SHARE_URL ?? "https://github.com/alifikan94/hacktober26" });
+      return send(res, 200, { model: MODEL, ready, modelError, students: STUDENTS, elevenlabs: !!process.env.ELEVENLABS_API_KEY, hosted: HOSTED });
     }
     if (req.method === "GET" && url.pathname === "/api/models") {
       try {
@@ -100,13 +99,6 @@ createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/curriculum") {
       res.writeHead(200, { "content-type": "application/json" }); return res.end(await readFile("curriculum/python.json"));
-    }
-    if (req.method === "GET" && url.pathname === "/api/search") {
-      if (limited(req, "search", 20)) return send(res, 429, { error: "Too many searches. Try again in a minute." });
-      const q = (url.searchParams.get("q") ?? "").trim().slice(0, 200);
-      if (!q) return send(res, 400, { error: "q required" });
-      try { return send(res, 200, { hits: await ddgSearch(q) }); }
-      catch (e) { return send(res, 502, { error: "Search unavailable: " + (e as Error).message }); }
     }
     if (req.method === "POST" && url.pathname === "/api/turn") {
       // Streams one JSON line per student as it finishes, then "coverage" (examiner) and "done".

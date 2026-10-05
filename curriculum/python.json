@@ -9,7 +9,6 @@
         {
           "id": "variables",
           "title": "Variables and data types",
-          "search": "python variables and data types for beginners",
           "links": [
             {
               "title": "Python Tutorial: An Informal Introduction",
@@ -82,7 +81,6 @@
         {
           "id": "numbers",
           "title": "Numbers and math operations",
-          "search": "python arithmetic operators integer division modulo float rounding",
           "links": [
             {
               "title": "Using Python as a calculator",
@@ -153,7 +151,6 @@
         {
           "id": "conditionals",
           "title": "Booleans and conditionals",
-          "search": "python if elif else boolean comparison operators beginners",
           "links": [
             {
               "title": "if Statements",
@@ -229,7 +226,6 @@
         {
           "id": "functions",
           "title": "Functions and scope",
-          "search": "python functions parameters return scope local global beginners",
           "links": [
             {
               "title": "Defining Functions",
@@ -300,7 +296,6 @@
         {
           "id": "loops-lists",
           "title": "Loops and lists",
-          "search": "python for loop while loop lists append enumerate beginners",
           "links": [
             {
               "title": "for Statements",
@@ -377,7 +372,6 @@
         {
           "id": "dicts",
           "title": "Dictionaries",
-          "search": "python dictionaries keys values items get loop beginners",
           "links": [
             {
               "title": "Dictionaries",
@@ -445,7 +439,6 @@
         {
           "id": "errors",
           "title": "Error handling",
-          "search": "python try except ValueError ZeroDivisionError beginners",
           "links": [
             {
               "title": "Errors and Exceptions",
@@ -502,6 +495,81 @@
                   "specific|valueerror|zerodivision|type of error",
                   "catch|except",
                   "raise|own error"
+                ],
+                "min": 2
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "capstone",
+      "title": "Capstone",
+      "lessons": [
+        {
+          "id": "capstone",
+          "title": "Capstone: build your certificate",
+          "links": [
+            {
+              "title": "f-strings (formatted string literals)",
+              "url": "https://docs.python.org/3/tutorial/inputoutput.html#formatted-string-literals"
+            },
+            {
+              "title": "str.center()",
+              "url": "https://docs.python.org/3/library/stdtypes.html#str.center"
+            }
+          ],
+          "theory": "<p>This is your final project, and you design it. Instead of us handing you a certificate, you'll write a Python function that prints <b>your own</b>. Make it look the way you want. Here are the building blocks.</p><p><b>Repeat text:</b> <code>\"=\" * 40</code> prints a line of 40 equals signs. That's a border.</p><p><b>Centre text:</b> <code>name.center(40)</code> puts the text in the middle of 40 characters. With an f-string you can write <code>f\"{name:^40}\"</code>.</p><p><b>Make it reusable:</b> <code>def make_certificate(name, course, hours):</code> lets the same design work for anyone.</p><p><b>Add your own touch:</b> a <code>for</code> loop can print a row of stars or a list of skills. A motto, a signature line, anything.</p><p>Plan it on paper first: border, title, name, what you completed, then your own idea.</p>",
+          "example": "def make_certificate(name, course, hours):\n    width = 44\n    print(\"=\" * width)\n    print(\"CERTIFICATE OF COMPLETION\".center(width))\n    print(\"-\" * width)\n    print(\"This certifies that\".center(width))\n    print(name.upper().center(width))\n    print(f\"completed {course}\".center(width))\n    print(f\"({hours} hours of practice)\".center(width))\n    print(\"=\" * width)\n\nmake_certificate(\"Your Name\", \"Python for the Grid\", 12)",
+          "practice": {
+            "prompt": "Print a framed name: a border of equals signs, your name centred underneath, then another border.",
+            "starter": "width = 40\nname = \"Your Name\"\n# your code here\n"
+          },
+          "workshop": {
+            "title": "Your Certificate",
+            "brief": "Design your own certificate. Write make_certificate(name, course, hours) that prints it: a border, a title, the name centred, the course, and at least one touch that is entirely yours (a loop of stars, a skills list, a motto). Then call it with your own name.",
+            "starter": "def make_certificate(name, course, hours):\n    width = 44\n    # 1. top border\n    # 2. title\n    # 3. the name, centred\n    # 4. what was completed\n    # 5. YOUR OWN TOUCH: a loop, a motto, a signature line...\n    # 6. bottom border\n    pass\n\nmake_certificate(\"Your Name\", \"Python for the Grid\", 12)\n"
+          },
+          "teach": {
+            "topic": "How my certificate function works"
+          },
+          "rubric": [
+            {
+              "id": "params",
+              "label": "Why it takes parameters",
+              "point": "The function takes parameters (name, course, hours) so the same design can be reused for different values.",
+              "keywords": {
+                "terms": [
+                  "parameter|argument|input",
+                  "reuse|any|different|again|every|anyone",
+                  "function|\\bdef\\b"
+                ],
+                "min": 2
+              }
+            },
+            {
+              "id": "text",
+              "label": "How the text is built",
+              "point": "The certificate text is built from strings: repeating characters with * for borders, centring with center() or formatting, and f-strings to insert the values.",
+              "keywords": {
+                "terms": [
+                  "f.?string|format|curly",
+                  "center|centre|middle|align",
+                  "repeat|times|multipl|star|border",
+                  "string"
+                ],
+                "min": 2
+              }
+            },
+            {
+              "id": "design",
+              "label": "One design choice of your own",
+              "point": "The learner explains at least one design choice that is their own, such as a loop, a decoration or extra lines, and why they chose it.",
+              "keywords": {
+                "terms": [
+                  "loop|\\bfor\\b|stars|decoration|motto|signature",
+                  "choice|chose|decid|design|added|my own|because|wanted"
                 ],
                 "min": 2
               }
